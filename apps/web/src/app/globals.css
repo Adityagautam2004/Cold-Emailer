@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #14161a; /* app background, warm-neutral graphite, not pure black */
+  --surface: #1c1f24; /* cards, table rows */
+  --line: #2a2f36; /* hairlines, 1px, used generously */
+  --text: #e8e6e1; /* primary text, slightly warm off-white */
+  --muted: #8b9199; /* secondary text, labels */
+  --accent: #4f5bd5; /* indigo — interactive only: links, focus, primary buttons */
+  --pending: #c9922e; /* amber — queued / in flight */
+  --good: #3e9b6b; /* green — replied. the colour the user wants to see */
+  --bad: #c4553f; /* clay red — bounced / failed */
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-surface: var(--surface);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-pending: var(--pending);
+  --color-good: var(--good);
+  --color-bad: var(--bad);
+
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  /*
+   * shadcn/ui semantic layer — generated components (via `npx shadcn add ...`) reference
+   * these class names (bg-background, text-foreground, bg-primary, etc). Every value below
+   * is a reference to one of the nine tokens above; this layer introduces no new colours,
+   * it only gives shadcn's naming convention a mapping onto our palette. See DECISIONS.md.
+   */
+  --color-background: var(--ink);
+  --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--text);
+  --color-secondary: var(--surface);
+  --color-secondary-foreground: var(--text);
+  --color-muted-foreground: var(--muted);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--bad);
+  --color-destructive-foreground: var(--text);
+  --color-border: var(--line);
+  --color-input: var(--line);
+  --color-ring: var(--accent);
+  --radius: 0.5rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .transition-standard {
+    transition-duration: 140ms;
+  }
+}
+
+* {
+  border-color: var(--line);
+}
+
+body {
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

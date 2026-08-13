@@ -1,0 +1,23 @@
+{
+  "name": "@dispatch/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
+    "start": "dotenv -e ../../.env -- tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dispatch/config": "*",
+    "@dispatch/core": "*",
+    "@dispatch/db": "*",
+    "@supabase/supabase-js": "^2.46.1",
+    "bullmq": "^5.28.1",
+    "ioredis": "^5.4.1",
+    "lru-cache": "^11.0.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

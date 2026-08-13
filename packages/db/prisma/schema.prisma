@@ -1,0 +1,270 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  passwordHash  String?
+  college       String?
+  timezone      String    @default("Asia/Kolkata")
+  acceptedTosAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  emailAccounts EmailAccount[]
+  resumes       Resume[]
+  templates     Template[]
+  contactLists  ContactList[]
+  campaigns     Campaign[]
+  suppressions  Suppression[]
+  events        Event[]
+  accounts      Account[]
+  sessions      Session[]
+
+  @@map("users")
+}
+
+// Auth.js v5 Prisma adapter models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model EmailAccount {
+  id              String    @id @default(cuid())
+  userId          String
+  provider        String    @default("smtp") // "smtp" | "gmail_oauth"
+  fromEmail       String
+  fromName        String
+  credentialEnc   String // AES-256-GCM payload, see §7
+  imapHost        String    @default("imap.gmail.com")
+  smtpHost        String    @default("smtp.gmail.com")
+  smtpPort        Int       @default(465)
+
+  dailyCap        Int       @default(10)
+  sentToday       Int       @default(0)
+  quotaResetAt    DateTime
+  warmupStartedAt DateTime  @default(now())
+  status          String    @default("active") // active | paused | error
+  statusReason    String?
+  lastImapUid     Int?
+  lastPolledAt    DateTime?
+  verifiedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaigns Campaign[]
+
+  @@unique([userId, fromEmail])
+  @@map("email_accounts")
+}
+
+model Resume {
+  id         String   @id @default(cuid())
+  userId     String
+  storageKey String
+  filename   String
+  sizeBytes  Int
+  version    Int      @default(1)
+  isActive   Boolean  @default(true)
+  isArchived Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaigns Campaign[]
+
+  @@map("resumes")
+}
+
+model Template {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  subject   String
+  bodyText  String   @db.Text // source of truth, plain text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  steps CampaignStep[]
+
+  @@map("templates")
+}
+
+model ContactList {
+  id             String   @id @default(cuid())
+  userId         String
+  name           String
+  sourceFilename String
+  rowCount       Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contacts  Contact[]
+  campaigns Campaign[]
+
+  @@map("contact_lists")
+}
+
+model Contact {
+  id        String @id @default(cuid())
+  listId    String
+  company   String?
+  hrName    String?
+  email     String // stored lowercased, trimmed
+  title     String?
+  custom    Json   @default("{}")
+  status    String @default("pending") // pending|sent|replied|bounced|unsubscribed|skipped
+  rowNumber Int
+
+  list  ContactList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  sends Send[]
+
+  @@unique([listId, email])
+  @@index([listId, status])
+  @@map("contacts")
+}
+
+model Campaign {
+  id             String    @id @default(cuid())
+  userId         String
+  listId         String
+  resumeId       String
+  emailAccountId String
+  name           String
+  status         String    @default("draft") // draft|scheduled|running|paused|completed|stopped
+  pauseReason    String?
+
+  perDayCap     Int       @default(20)
+  minGapMinutes Int       @default(6)
+  windowStart   String    @default("10:00") // local HH:mm
+  windowEnd     String    @default("18:00")
+  daysOfWeek    Int[]     @default([1, 2, 3, 4, 5]) // 1=Mon .. 7=Sun, ISO
+  timezone      String    @default("Asia/Kolkata")
+  attachResume  Boolean   @default(true)
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  list         ContactList    @relation(fields: [listId], references: [id])
+  resume       Resume         @relation(fields: [resumeId], references: [id])
+  emailAccount EmailAccount   @relation(fields: [emailAccountId], references: [id])
+  steps        CampaignStep[]
+  sends        Send[]
+
+  @@map("campaigns")
+}
+
+model CampaignStep {
+  id         String @id @default(cuid())
+  campaignId String
+  templateId String
+  stepOrder  Int // 0 = initial, 1..2 = follow-ups
+  delayDays  Int    @default(0) // days after previous step's send
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  template Template @relation(fields: [templateId], references: [id])
+  sends    Send[]
+
+  @@unique([campaignId, stepOrder])
+  @@map("campaign_steps")
+}
+
+model Send {
+  id                String    @id @default(cuid())
+  campaignId        String
+  contactId         String
+  stepId            String
+  scheduledAt       DateTime
+  status            String    @default("queued") // queued|claimed|sending|sent|failed|cancelled|skipped
+  attempts          Int       @default(0)
+  lastError         String?
+  providerMessageId String? // RFC Message-ID we generated
+  threadId          String?
+  sentAt            DateTime?
+  renderedSubject   String?
+  claimedAt         DateTime?
+
+  campaign Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact  Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  step     CampaignStep @relation(fields: [stepId], references: [id])
+  events   Event[]
+
+  @@unique([campaignId, contactId, stepId])
+  @@index([status, scheduledAt])
+  @@index([providerMessageId])
+  @@map("sends")
+}
+
+model Event {
+  id         String   @id @default(cuid())
+  sendId     String?
+  userId     String?
+  type       String // queued|sent|failed|replied|bounced|unsubscribed|paused|...
+  occurredAt DateTime @default(now())
+  meta       Json     @default("{}")
+
+  send Send? @relation(fields: [sendId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, occurredAt])
+  @@map("events")
+}
+
+model Suppression {
+  id        String   @id @default(cuid())
+  userId    String
+  email     String
+  reason    String // replied|bounced|unsubscribed|manual
+  token     String?  @unique // unsubscribe token that created it
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, email])
+  @@map("suppressions")
+}
