@@ -1,5 +1,8 @@
 import { randomBytes } from "node:crypto";
 
+/** §8.3 — reject a resume upload larger than this at the upload step, with a clear message. */
+export const MAX_RESUME_SIZE_BYTES = 2 * 1024 * 1024;
+
 /** `<{sendId}.{random}@{domain}>` — this is the join key for reply detection, so it must be unique per send. */
 export function generateMessageId(sendId: string, domain: string): string {
   const random = randomBytes(8).toString("hex");

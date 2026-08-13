@@ -3,6 +3,64 @@
 Running log of anywhere this build deviated from, or filled a silent gap in,
 `BUILD_SPEC.md`. Newest first.
 
+## 2026-08-14 — Phase 1
+
+**Split the Auth.js config into `auth.config.ts` (Edge-safe) and `auth.ts` (full).**
+Next.js middleware runs on the Edge runtime by default. The full config's Credentials
+provider calls `argon2.verify()`, and argon2 is a native Node addon — importing it in
+middleware crashes the build (`UnhandledSchemeError: node:crypto`). `auth.config.ts` holds
+only the Google provider and the JWT callbacks (everything Edge-safe); `middleware.ts`
+builds its own lightweight `NextAuth(authConfig)` instance from that. `auth.ts` spreads
+`authConfig` and adds the Credentials provider plus the Prisma adapter, and only ever runs
+in Node-runtime route handlers and server components. This is Auth.js's own documented
+pattern for exactly this situation, not a spec deviation, but worth recording since it
+means two config files where one might be expected.
+
+**The ToS gate (§6) is checked in the `(app)` layout server component, not middleware.**
+Middleware only verifies a session exists (Edge-safe, no DB access). Whether
+`acceptedTosAt` is set requires a fresh Prisma read, which needs the Node runtime — so
+that check lives in `src/app/(app)/layout.tsx`, which redirects to `/accept-terms` itself.
+
+**Resume upload is two-step: `upload-url` (pre-generates a client-side id, returns a
+signed PUT url) then `confirm` (creates the DB row only after verifying the object exists
+in storage).** A single-step "create row, then upload" would leave an orphaned DB row
+pointing at nothing if the browser's PUT fails. Verified the raw signed-upload-URL
+contract directly against the real Supabase bucket before building the UI around it: a
+plain `fetch(signedUrl, {method:"PUT", headers:{"Content-Type":"application/pdf"}, body})`
+works with no client-side Supabase SDK or exposed key at all — §3's "no CORS setup needed"
+note was the tell that this was the intended shape.
+
+**A resource owned by a different user reports 404, not 403, everywhere (`getOwnedResume`
+and everything modeled on it).** §19 allows either; 404 is used uniformly so a probing
+request can't distinguish "not yours" from "doesn't exist."
+
+**`packages/core/src/storage.ts` wraps Supabase Storage**, parameterized by config
+(url/key/bucket) rather than reading env itself — same pattern as the `EmailSender`
+interface — so both `apps/web` and the Phase 5 worker share one implementation without
+`packages/core` importing Next.js or reaching into `@dispatch/config` directly.
+
+**Test-only fixes, no product impact:** `server-only`'s default export unconditionally
+throws outside Next's own bundler (it only resolves safely under the `react-server`
+export condition, which vitest doesn't know about) — aliased to a no-op stub in
+`vitest.config.ts` for tests only. Also found and fixed a bug in that same config file's
+own `.env` parser: it split lines on `\n` only, and the file has CRLF endings, so every
+line except the last kept a trailing `\r` that broke the end-anchored regex — silently
+loaded exactly one env var. Fixed by splitting on `/\r?\n/`.
+
+**No separate test database.** Integration tests (e.g. `resumes.test.ts`) run against the
+same Supabase Postgres as local dev, with explicit `beforeAll`/`afterAll` create/cleanup.
+Acceptable at this project's scale; noted here so it isn't mistaken for an oversight.
+
+**Verified via a live E2E script (not committed) rather than solely by inspection:**
+signup → credentials sign-in → session cookie → upload a real ~1MB PDF to the live
+Supabase bucket → confirm → fetch the preview URL and diff the downloaded bytes against
+the upload → a second user gets 404 on the first user's resume id and an empty list of
+their own → unauthenticated requests get 401 → sign-out invalidates the session. All test
+data (2 users, 1 storage object) was deleted afterward. **What this doesn't cover:** the
+actual Google OAuth consent-screen click-through needs a real browser and your Google
+account — the Credentials-provider path above exercises the identical session/storage/
+isolation code downstream of sign-in, but the Google button itself needs your manual check.
+
 ## 2026-08-14 — Phase 0
 
 **Added `directUrl` to the Prisma datasource, wired to a new `DIRECT_URL` env var.**

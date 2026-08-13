@@ -9,6 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.46.1",
     "@date-fns/tz": "^1.2.0",
     "date-fns": "^4.1.0",
     "exceljs": "^4.4.0",
