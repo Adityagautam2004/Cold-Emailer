@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { EmailAccountManager } from "@/app/(app)/settings/email-account-manager";
@@ -69,6 +70,25 @@ export function OnboardingWizard({
 
   const allDone = step1Done && step2Done && step3Done && step4Done;
 
+  // Auto-advance to the next step the moment the current one completes (server data refreshes
+  // via router.refresh() inside EmailAccountManager/ResumeManager after each save). Tracked via
+  // refs rather than "is this step done" directly, so revisiting an already-completed step by
+  // clicking its chip doesn't immediately bounce the user back off it.
+  const prevStep2Done = useRef(step2Done);
+  const prevStep3Done = useRef(step3Done);
+  useEffect(() => {
+    if (!prevStep2Done.current && step2Done && active === "email") {
+      setActive("resume");
+    }
+    prevStep2Done.current = step2Done;
+  }, [step2Done, active]);
+  useEffect(() => {
+    if (!prevStep3Done.current && step3Done && active === "resume") {
+      setActive("verify");
+    }
+    prevStep3Done.current = step3Done;
+  }, [step3Done, active]);
+
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
     setProfileError(null);
@@ -94,34 +114,45 @@ export function OnboardingWizard({
 
   return (
     <div>
-      <ol className="mb-8 flex flex-wrap gap-2">
-        {steps.map((s, i) => (
-          <li key={s.key}>
-            <button
-              type="button"
-              onClick={() => setActive(s.key)}
-              className={cn(
-                "flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-standard",
-                active === s.key ? "border-accent text-text" : "border-line text-muted hover:text-text"
-              )}
-            >
-              <span
+      <div className="mb-6 flex items-center justify-between">
+        <ol className="flex flex-wrap gap-2">
+          {steps.map((s, i) => (
+            <li key={s.key}>
+              <button
+                type="button"
+                onClick={() => setActive(s.key)}
                 className={cn(
-                  "flex h-5 w-5 items-center justify-center rounded-full font-mono text-[10px]",
-                  s.done ? "bg-good text-ink" : "bg-line text-muted"
+                  "flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-standard",
+                  active === s.key ? "border-accent text-text" : "border-line text-muted hover:text-text"
                 )}
               >
-                {s.done ? "✓" : i + 1}
-              </span>
-              {s.label}
-            </button>
-          </li>
-        ))}
-      </ol>
+                <span
+                  className={cn(
+                    "flex h-5 w-5 items-center justify-center rounded-full font-mono text-[10px]",
+                    s.done ? "bg-good text-ink" : "bg-line text-muted"
+                  )}
+                >
+                  {s.done ? "✓" : i + 1}
+                </span>
+                {s.label}
+              </button>
+            </li>
+          ))}
+        </ol>
+        <Link href="/dashboard" className="shrink-0 text-sm text-muted hover:text-text hover:underline">
+          Skip to dashboard
+        </Link>
+      </div>
 
       {allDone && (
-        <div className="mb-6 rounded-md border border-good/40 bg-good/10 px-4 py-3 text-sm text-good">
-          You&apos;re fully set up. Head to Templates and Lists to build your first campaign.
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-good/40 bg-good/10 px-4 py-3 text-sm text-good">
+          <span>You&apos;re fully set up.</span>
+          <Link
+            href="/dashboard"
+            className="rounded-md bg-good px-4 py-1.5 font-medium text-ink transition-standard hover:opacity-90"
+          >
+            Go to dashboard
+          </Link>
         </div>
       )}
 
@@ -201,14 +232,22 @@ export function OnboardingWizard({
       {active === "verify" && (
         <div className="rounded-lg border border-line bg-surface p-5">
           <h2 className="font-medium">Send a test email</h2>
-          <p className="mt-2 text-sm text-muted">
-            This is the same &quot;Send test email to myself&quot; button as the Connect Gmail
-            step — your account isn&apos;t verified, and can&apos;t back a campaign, until it
-            succeeds once.
-          </p>
-          <div className="mt-4">
-            <EmailAccountManager initialAccounts={emailAccounts} />
-          </div>
+          {step4Done ? (
+            <p className="mt-2 text-sm text-good">
+              Verified — your account can back a campaign now.
+            </p>
+          ) : (
+            <>
+              <p className="mt-2 text-sm text-muted">
+                Click &quot;Send test email to myself&quot; below on the account you just
+                connected. Your account isn&apos;t verified, and can&apos;t back a campaign,
+                until it succeeds once.
+              </p>
+              <div className="mt-4">
+                <EmailAccountManager initialAccounts={emailAccounts} hideConnectForm={emailAccounts.length > 0} />
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

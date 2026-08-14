@@ -29,7 +29,16 @@ function StatusBadge({ status, verified }: { status: string; verified: boolean }
   return <span className="font-mono text-xs text-good">active</span>;
 }
 
-export function EmailAccountManager({ initialAccounts }: { initialAccounts: EmailAccountRow[] }) {
+export function EmailAccountManager({
+  initialAccounts,
+  hideConnectForm = false,
+}: {
+  initialAccounts: EmailAccountRow[];
+  /** Onboarding's "send test email" step shows this same component right after the "connect
+   * Gmail" step already did — repeating the "connect a new account" form there reads as if
+   * the first connection didn't take. */
+  hideConnectForm?: boolean;
+}) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -198,6 +207,7 @@ export function EmailAccountManager({ initialAccounts }: { initialAccounts: Emai
         );
       })}
 
+      {!hideConnectForm && (
       <div className="rounded-lg border border-line bg-surface p-5">
         <h3 className="font-medium">Connect a Gmail account</h3>
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted">
@@ -266,6 +276,7 @@ export function EmailAccountManager({ initialAccounts }: { initialAccounts: Emai
           </button>
         </form>
       </div>
+      )}
     </div>
   );
 }
