@@ -16,6 +16,7 @@ import { env, logger } from "@dispatch/config";
 import { Prisma, prisma } from "@dispatch/db";
 import { Worker, type ConnectionOptions } from "bullmq";
 import { checkCircuitBreaker } from "../circuit-breaker.js";
+import { pauseAccountOnError } from "../account-errors.js";
 import { getResumeBuffer } from "../resume-cache.js";
 import { QUEUE_NAMES } from "../queues.js";
 
@@ -137,7 +138,19 @@ export async function processSend(sendId: string): Promise<void> {
     return;
   }
 
-  const secret = decrypt(emailAccount.credentialEnc);
+  let secret: string;
+  try {
+    secret = decrypt(emailAccount.credentialEnc);
+  } catch (err) {
+    // Same reasoning as poll-inbox.ts: an undecryptable credential will never succeed on
+    // retry, so treat it as an account-class error immediately rather than letting the
+    // stuck-claim sweeper hand this Send back for an identical failure every 10 minutes.
+    logger.error({ sendId: send.id, err }, "send: stored credential could not be decrypted");
+    await prisma.send.update({ where: { id: send.id }, data: { status: "failed", lastError: "Stored credential could not be decrypted." } });
+    await pauseAccountOnError(emailAccount.id, user.id, "Stored credential could not be decrypted. Reconnect your mailbox.");
+    return;
+  }
+
   const sender = createSender({
     provider: "smtp",
     fromEmail: emailAccount.fromEmail,
@@ -188,18 +201,8 @@ export async function processSend(sendId: string): Promise<void> {
       await checkCircuitBreaker(campaign.id);
     } else if (classified.class === "account") {
       // The attempt did hit Gmail (it authenticated the connection) — quota consumption stands.
-      await prisma.$transaction([
-        prisma.send.update({ where: { id: send.id }, data: { status: "failed", lastError: classified.reason } }),
-        prisma.emailAccount.update({
-          where: { id: emailAccount.id },
-          data: { status: "error", statusReason: classified.reason },
-        }),
-        prisma.campaign.updateMany({
-          where: { emailAccountId: emailAccount.id, status: "running" },
-          data: { status: "paused", pauseReason: classified.reason },
-        }),
-        prisma.event.create({ data: { sendId: send.id, userId: user.id, type: "account_error", meta: { reason: classified.reason } } }),
-      ]);
+      await prisma.send.update({ where: { id: send.id }, data: { status: "failed", lastError: classified.reason } });
+      await pauseAccountOnError(emailAccount.id, user.id, classified.reason);
     } else {
       // transient — the SMTP call never actually completed, give the quota back (§9.2).
       await prisma.emailAccount.update({ where: { id: emailAccount.id }, data: { sentToday: { decrement: 1 } } });

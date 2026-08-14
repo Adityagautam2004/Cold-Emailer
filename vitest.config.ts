@@ -27,6 +27,13 @@ export default defineConfig({
   test: {
     include: ["packages/**/src/**/*.test.ts", "apps/**/src/**/*.test.ts"],
     environment: "node",
+    // Integration tests share one real, pooled Supabase connection (no separate test DB —
+    // see DECISIONS.md). Running every test *file* in its own worker process means a full
+    // `vitest run` puts far more concurrent round trips through that one pool than any
+    // single file does alone; the default 5s testTimeout is comfortable for one file in
+    // isolation but occasionally too tight under that combined load. Raised rather than
+    // reducing file parallelism, which would slow every run for a rare full-suite-only flake.
+    testTimeout: 20_000,
     env: {
       ...loadRootEnv(),
       ENCRYPTION_KEY: "0".repeat(64),

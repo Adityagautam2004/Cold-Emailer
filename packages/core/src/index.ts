@@ -7,5 +7,6 @@ export * from "./mail.js";
 export * from "./storage.js";
 export * from "./seed-templates.js";
 export * from "./unsubscribe.js";
+export * from "./reply-detection.js";
 export * from "./sender/index.js";
 export * from "./sender/errors.js";

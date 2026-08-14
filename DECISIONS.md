@@ -3,6 +3,74 @@
 Running log of anywhere this build deviated from, or filled a silent gap in,
 `BUILD_SPEC.md`. Newest first.
 
+## 2026-08-14 — Phase 6
+
+**Reply, bounce, and unsubscribe all share one cascade helper** (`suppressEmailCascade` in
+`packages/db/src/suppression.ts`), not three separate implementations. All three mean the
+same thing operationally — this address, everywhere it appears across the user's lists,
+stops receiving anything — and `reason` (`replied`/`bounced`/`unsubscribed`) maps directly
+onto `Contact.status`. It lives in `packages/db` rather than `packages/core` because it's
+the one place both `apps/web` (the unsubscribe route) and `apps/worker` (reply/bounce
+detection) can both reach without duplicating Prisma calls; `packages/core` stays
+DB-free per its existing convention. The cascade touches **every** `Contact` row across
+the user's lists that shares the email, not just the one row that triggered the match —
+the same recruiter can appear in more than one uploaded list.
+
+**`/u/[token]` is a `route.ts`, not a `page.tsx`.** Next.js won't allow both on the same
+segment, and a plain React page can only handle GET. The email's `List-Unsubscribe-Post`
+header (set in `packages/core/src/mail.ts` back in Phase 5) advertises RFC 8058 one-click
+support — meaning the *recipient's own* mail provider (Gmail, Outlook) can POST directly
+to this URL from its native "Unsubscribe" chip, without ever rendering a page. Not
+supporting that POST would mean quietly breaking a feature we already claim to support.
+GET performs the unsubscribe immediately and renders a hand-built HTML confirmation
+(inline styles, not Tailwind — a route handler has no access to the app's CSS pipeline);
+POST does the same and returns bare JSON. Both paths are idempotent, so a mail security
+scanner prefetching the GET link is a harmless no-op, not a data-loss risk.
+
+**IMAP's first poll for a newly-connected account never scans pre-existing mailbox
+history** — it only records the current `uidNext` as a baseline (`lastImapUid`) and
+returns. §13 says "fetch since `lastPolledAt`," which is ambiguous on a first poll with no
+prior value. Scanning years of old INBOX history for reply/bounce matches the first time
+an account connects would be slow, mostly irrelevant (nothing in that history could match
+a `Send.providerMessageId` that didn't exist yet), and risks false-positive fallback
+matches against unrelated old mail from the same sender addresses.
+
+**Bounce recipient extraction has a heuristic fallback beyond RFC 3464 parsing.** The
+primary path parses the `message/delivery-status` MIME part's `Final-Recipient`/
+`Original-Recipient` field — but real-world bounces from arbitrary receiving mail servers
+are inconsistent about including that part correctly. `extractLikelyBouncedRecipient`
+falls back to scanning the DSN's human-readable body for the first email address that
+isn't the receiving mailbox's own address or a generic mailer address. Heuristic, not
+exact — documented as such, and only ever reached when the structured part is absent.
+
+**A `decrypt()` failure on a stored credential is now an account-class error in both the
+send job and poll-inbox**, not an uncaught exception. Found live: two leftover
+test `EmailAccount` rows with deliberately-fake `credentialEnc` values (`"v1.fake.fake.fake"`)
+were still `status: 'active'` when the newly-added poll-inbox scheduler picked them up: the
+`decrypt()` call threw, and — before this fix — that would have propagated out of the job
+entirely, meaning the exact same account gets retried and fails identically every 60
+seconds (poll-inbox) or every 10-minute stuck-claim sweep (the send job) forever, forever
+spamming errors without ever surfacing to the student that their mailbox needs
+reconnecting. An undecryptable credential can't succeed on retry the way a network blip
+can, so both jobs now call the same `pauseAccountOnError` used for real SMTP/IMAP auth
+failures — the account flips to `status: 'error'` and stops being selected as "due" at
+all, exactly like a real auth failure. `pauseAccountOnError` itself was extracted from
+`send.ts`'s existing account-error branch (Phase 5) into `apps/worker/src/account-errors.ts`
+so poll-inbox doesn't duplicate it.
+
+**Added `@types/mailparser` as a dev dependency of `packages/core`.** `mailparser` ships
+no bundled `.d.ts` of its own (unlike `imapflow`, which does); without the DefinitelyTyped
+package every import comes through as untyped `any`, which would have hidden real
+mistakes in the header/attachment handling this phase depends on.
+
+**Raised vitest's global `testTimeout` to 20s** (from the 5s default). Not a product fix —
+an integration test that reliably passes in isolation in ~4s occasionally timed out only
+when the *entire* suite ran (every test file in its own worker process, all sharing one
+real pooled Supabase connection — no separate test DB, per the Phase 0 decision below).
+More concurrent round trips through one pool under a full run occasionally push a single
+round trip past 5s; reducing file-level parallelism instead would slow every run to fix a
+rare full-suite-only flake, so the timeout moved instead.
+
 ## 2026-08-14 — Phase 5
 
 **`packages/config`'s shared logger never uses pino's `transport` option, even
