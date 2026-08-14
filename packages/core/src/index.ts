@@ -5,5 +5,6 @@ export * from "./template.js";
 export * from "./import.js";
 export * from "./mail.js";
 export * from "./storage.js";
+export * from "./seed-templates.js";
 export * from "./sender/index.js";
 export * from "./sender/errors.js";

@@ -3,6 +3,35 @@
 Running log of anywhere this build deviated from, or filled a silent gap in,
 `BUILD_SPEC.md`. Newest first.
 
+## 2026-08-14 — Phase 3
+
+**The 3 seed templates are per-user, created lazily on first `GET /api/templates`**, not a
+shared/global template concept. §5's schema gives `Template` a `userId` with no notion of
+a system-owned template, so "every new user gets 3 starters" means creating real owned
+rows for each user the first time their template list is loaded (idempotent — checks
+`count === 0` first), rather than adding new schema surface for something read-only.
+
+**Template save-time validation (§12's warnings) never blocks saving** — only starting a
+campaign is blocked by the hard §2.4 rule (`hasPersonalizationVariable`). A template with
+zero variables can be saved (with a warning) since a student might reasonably draft one
+before deciding on personalisation, or use it as a base for a follow-up step.
+
+**The live preview renders subject and body as two independent `renderTemplate` calls**,
+not one combined string split back apart — simpler and doesn't risk a false match if a
+body ever contained the separator text.
+
+**Preview uses dummy data only, for now.** §12 says preview should run "against a real
+contact from a selected list — or dummy data if no list exists yet." Lists don't exist
+until Phase 4, so every template preview in this phase necessarily uses the dummy
+contact (`Priya Sharma / Acme Corp / SDE Intern`). Revisit at the end of Phase 4: add a
+list-selector to `TemplateEditor` so an existing list's real first contact can be chosen.
+
+**Verified live against the real dev server, not just by inspection:** a fresh user's
+first `/api/templates` call returns exactly the three named seed templates; a
+newly-created template with no variable gets exactly one `no-variable` warning; editing
+it to include `{{hr_name}}`/`{{company}}` clears the warnings; a second user gets their
+own independent set of 3 seeds (no id overlap) and a 404 on the first user's template id.
+
 ## 2026-08-14 — Phase 2
 
 **The onboarding wizard's "Connect Gmail" and "Send test email" steps share one UI panel
