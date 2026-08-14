@@ -1,6 +1,10 @@
 import { env, logger } from "@dispatch/config";
+import { Queue } from "bullmq";
 import { createRedisConnection } from "./redis.js";
+import { QUEUE_NAMES } from "./queues.js";
 import { registerTickJob } from "./jobs/tick.js";
+import { registerSendWorker } from "./jobs/send.js";
+import { registerResetQuotaJob } from "./jobs/reset-quota.js";
 
 async function main() {
   logger.info({ dryRun: env.SEND_DRY_RUN }, "worker starting");
@@ -8,13 +12,17 @@ async function main() {
   const connection = createRedisConnection();
   connection.on("error", (err) => logger.error({ err }, "redis connection error"));
 
-  const { worker: tickWorker } = await registerTickJob(connection);
+  const sendQueue = new Queue(QUEUE_NAMES.send, { connection });
+  const sendWorker = registerSendWorker(connection);
+  const { worker: tickWorker } = await registerTickJob(connection, sendQueue);
+  const { worker: resetQuotaWorker } = await registerResetQuotaJob(connection);
 
-  logger.info("worker ready — tick scheduled every 60s");
+  logger.info("worker ready — tick every 60s, quota reset every 15m");
 
   const shutdown = async () => {
     logger.info("worker shutting down");
-    await tickWorker.close();
+    await Promise.all([tickWorker.close(), sendWorker.close(), resetQuotaWorker.close()]);
+    await sendQueue.close();
     connection.disconnect();
     process.exit(0);
   };

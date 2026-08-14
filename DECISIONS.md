@@ -3,6 +3,98 @@
 Running log of anywhere this build deviated from, or filled a silent gap in,
 `BUILD_SPEC.md`. Newest first.
 
+## 2026-08-14 — Phase 5
+
+**`packages/config`'s shared logger never uses pino's `transport` option, even
+conditionally.** Passing `{transport: {target: "pino-pretty", ...}}` — even behind a
+runtime `if (env === "development")` — crashed the Next.js dev server
+("Cannot find module .../vendor-chunks/lib/worker.js"). `pino-pretty`'s transport spawns
+a `worker_thread` pointed at `thread-stream`'s `lib/worker.js`; webpack statically traces
+and tries to bundle that path the moment the option merely exists in a traced module,
+regardless of whether the branch actually runs. Initially misdiagnosed as OneDrive file
+locking (the project lives in a OneDrive-synced folder) before root-causing it directly.
+Fixed by having the shared logger always emit plain JSON (no `transport` at all); `apps/worker`
+(a plain `tsx`/Node process, never webpack-bundled) instead pipes its own stdout through
+the `pino-pretty` CLI as a separate process (`"dev": "... tsx watch src/index.ts | pino-pretty"`
+in its `package.json`).
+
+**Found via a test-cleanup failure, has a real product implication:** `CampaignStep.template`
+is `onDelete: Restrict` on purpose (Phase 3 — deleting a template still referenced by a
+campaign should fail with a friendly error, not silently erase that campaign's history).
+But a plain `prisma.user.delete()` cascades to `Template` (via `User`'s own cascade) and to
+`Campaign`/`CampaignStep` (via a separate cascade path) independently — Postgres doesn't
+guarantee the CampaignStep side is gone before it tries to delete the Template side, so a
+whole-account deletion can trip the same Restrict constraint. **Not fixed by loosening the
+constraint** (that would defeat the Phase 3 guarantee) — instead, whoever deletes a User
+must explicitly delete that user's `Campaign` rows first (cascades `CampaignStep`/`Send`
+before `Template` is touched). Test cleanup here does this; the real self-service "delete
+my account" feature (§14 Settings, not yet built) will need the same explicit ordering —
+noted here so it isn't rediscovered the hard way.
+
+**Send-row generation and the campaign builder's review step share `computeSlots` with
+zero duplication** — the wizard's live per-day breakdown, the actual `/start` route's Send
+creation, and even mid-campaign follow-up scheduling (a single-slot `computeSlots` call)
+all call the exact same function from `packages/core`. There is no second scheduling
+implementation anywhere to drift from the tested one.
+
+**Follow-up threading reuses step 0's `renderedSubject`, not the follow-up template's own
+subject.** §10.3 says keep "the subject" with a `Re: ` prefix for threading — interpreted
+as the thread's original subject line, since most mail clients group by subject text in
+addition to `References`/`In-Reply-To`, and a follow-up template's own distinct subject
+would read as a second cold email even with correct headers. The follow-up template's
+`subject` field is still meaningful when that same template is used as an initial (step 0)
+send in a different campaign — it's simply not used for its own subject when acting as a
+follow-up.
+
+**A permanent SMTP-time rejection counts toward the bounce circuit breaker (§2.8) the same
+as a Phase 6 IMAP-detected DSN bounce** — both mean "this contact bounced," so
+`checkCircuitBreaker` is one shared function keyed off `Contact.status === 'bounced'`
+regardless of which path set it. Denominator is every `Send` that reached a final outcome
+(`sent` or `failed`) for the campaign, not just successes — an all-failing campaign should
+still trip the breaker well before 20 *successful* sends ever happen.
+
+**Verified end-to-end against a real worker process** (not just code review), using
+`SEND_DRY_RUN=true` and a directly-inserted `EmailAccount` row with a fake credential —
+legitimate because the dry-run path returns before `createSender()`/`decrypt()` are ever
+reached, so no real Gmail credential is required to exercise the scheduling, quota, pause/
+resume, and idempotency machinery honestly. What this can't cover without a real Gmail app
+password: an actual SMTP handshake succeeding and a real email landing in a real inbox
+(covered narrowly already in Phase 2's verify() path against real Gmail with a wrong
+password). The claim-uniqueness (`SKIP LOCKED`) and stuck-claim sweeper mechanics are
+covered directly against the real DB with concurrent callers and a backdated `claimedAt`,
+rather than by trying to choreograph an actual worker-process kill/restart across tool
+calls — the same mechanisms that make that safe (unique constraint, `SKIP LOCKED`, the
+10-minute sweep) are what's under test either way.
+
+**Real product bug, caught only by the live end-to-end run above, not by unit tests:**
+`computeSlots` deliberately clamps a day's last slot to exactly `windowEnd` whenever
+jitter would overshoot (by construction, this happens roughly half the time — the last
+item's `baseInterval` always equals the exact remaining span, so any `jitterMul > 1`
+clamps down to precisely `dayEnd`). `processClaimedSend`'s window recheck
+(`apps/worker/src/jobs/tick.ts`) compared `isWithinSendWindow(new Date(), ...)` — a
+byte-exact wall-clock comparison — against that same `windowEnd`. Any nonzero delay
+between a slot's `scheduledAt` firing and the tick actually processing that row (typically
+a few hundred ms to a few seconds; always > 0) pushed `now()` past `windowEnd`, so the
+recheck saw "outside window" and bounced the send to `nextEligibleWindowStart` — which,
+with a narrow `daysOfWeek` set, could be days out. First surfaced as a live acceptance
+test failure (a send scheduled for exactly `windowEnd` never reached `sent` within a
+10-minute poll) and reproduced twice before the root cause was clear. Fixed by tolerating
+a grace period measured from the send's own `scheduledAt` (`WINDOW_RECHECK_GRACE_MS`,
+5 minutes) rather than doing an exact `now()`-vs-`windowEnd` comparison — a send is still
+correctly deferred if it's genuinely stale (claimed long after it was due, e.g. after a
+worker outage), just not if it merely landed on the exact edge of its window. Regression
+tests added in `tick.test.ts` for both the grace-period pass-through and the
+genuinely-stale-still-defers case; `processClaimedSend` exported for direct testing.
+
+**The acceptance script's own pause/resume check had a latent assumption bug, unrelated to
+product code:** it reused the same `Send` row across the quota-cap-refusal assertion and
+the pause/resume assertion, but a `perDayCap: 3` campaign that had already placed 3
+successful sends will correctly refuse a 4th regardless of pause state — so "resume and
+verify it proceeds" could never have passed as originally written. Fixed by bumping the
+campaign's `perDayCap` between the two dimensions being tested, since quota-refusal and
+pause/resume gating are independent behaviours that don't need to share exhausted quota
+to both be exercised honestly.
+
 ## 2026-08-14 — Phase 4
 
 **Mapping and the pre-commit report run entirely client-side**, reusing the exact same
