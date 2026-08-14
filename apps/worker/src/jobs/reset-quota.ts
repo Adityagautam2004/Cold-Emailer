@@ -49,7 +49,9 @@ export async function registerResetQuotaJob(connection: ConnectionOptions): Prom
       const count = await resetDueQuotas();
       if (count > 0) logger.info({ count }, "reset quota for accounts past local midnight");
     },
-    { connection }
+    // See tick.ts for why drainDelay (seconds) is raised — this job only fires every 15
+    // minutes, so idle-polling every 5s wastes Redis commands for no benefit.
+    { connection, drainDelay: 55 }
   );
   worker.on("error", (err) => logger.error({ err }, "reset-quota worker error"));
 

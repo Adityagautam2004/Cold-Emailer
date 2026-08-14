@@ -20,6 +20,22 @@ import { getResumeBuffer } from "../resume-cache.js";
 import { QUEUE_NAMES } from "../queues.js";
 
 const APP_HOST = new URL(env.APP_URL).hostname;
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
+
+/**
+ * Message-ID domain used for threading (§ generateMessageId). In local dev, APP_URL is
+ * "http://localhost:3000", so APP_HOST is literally "localhost" — a Message-ID like
+ * "<id@localhost>" isn't a routable domain, and mail providers (Gmail included) treat that as
+ * a strong spam/malformed-mail signal: the sender's own submission relay accepts it (so it
+ * shows as "Sent"), but the recipient's server silently boxes or drops it. Fall back to the
+ * sending account's own domain, which is always a real, valid one.
+ */
+function messageIdDomain(appHost: string, fromEmail: string): string {
+  if (LOCAL_HOSTS.has(appHost) || appHost.endsWith(".local")) {
+    return fromEmail.split("@")[1] || appHost;
+  }
+  return appHost;
+}
 
 function isUniqueViolation(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
@@ -121,7 +137,7 @@ export async function processSend(sendId: string): Promise<void> {
 
   const unsubscribeUrl = buildUnsubscribeUrl(env.APP_URL, { userId: user.id, email: contact.email }, env.UNSUBSCRIBE_SECRET);
   const textWithOptOut = appendOptOut(bodyResult.text!, unsubscribeUrl);
-  const messageId = generateMessageId(send.id, APP_HOST);
+  const messageId = generateMessageId(send.id, messageIdDomain(APP_HOST, emailAccount.fromEmail));
   const headers = buildListUnsubscribeHeaders(unsubscribeUrl);
 
   let attachment: { filename: string; content: Buffer; contentType: string } | undefined;
@@ -242,7 +258,9 @@ export function registerSendWorker(connection: ConnectionOptions): Worker {
     async (job) => {
       await processSend(job.data.sendId as string);
     },
-    { connection, concurrency: 5 }
+    // See tick.ts for why drainDelay (seconds) is raised. A real send job still wakes this
+    // worker immediately when tick pushes it — this only cuts the idle-polling heartbeat.
+    { connection, concurrency: 5, drainDelay: 55 }
   );
   worker.on("error", (err) => logger.error({ err }, "send worker error"));
   worker.on("failed", (job, err) => logger.error({ sendId: job?.data?.sendId, err }, "send job failed"));

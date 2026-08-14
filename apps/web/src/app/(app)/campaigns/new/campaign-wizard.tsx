@@ -43,6 +43,14 @@ const DAY_LABELS = [
 const inputClass =
   "w-full rounded-md border border-line bg-surface px-3 py-2 text-sm outline-none focus-visible:border-accent";
 
+/** Parses a free-typed numeric field, clamped to [min, max] — falls back when empty/non-numeric
+ * (e.g. mid-edit) rather than snapping back on every keystroke like a clamped `useState<number>` would. */
+function toInt(raw: string, fallback: number, min: number, max = Infinity): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
 export function CampaignWizard({
   lists,
   resumes,
@@ -64,10 +72,16 @@ export function CampaignWizard({
   const [resumeId, setResumeId] = useState(resumes.find((r) => r.isActive)?.id ?? resumes[0]?.id ?? "");
   const [emailAccountId, setEmailAccountId] = useState(verifiedAccounts[0]?.id ?? "");
   const [stepTemplateIds, setStepTemplateIds] = useState<string[]>([templates[0]?.id ?? ""]);
-  const [delayDays, setDelayDays] = useState<number[]>([]); // for steps 1..n, parallel to stepTemplateIds.slice(1)
+  // Raw text the user is typing, for steps 1..n parallel to stepTemplateIds.slice(1) — clamped
+  // to a real number only via toInt() below, not on every keystroke, so the field stays freely
+  // editable (can be cleared and retyped) instead of snapping back to the minimum while empty.
+  const [delayDaysInput, setDelayDaysInput] = useState<string[]>([]);
+  const delayDays = delayDaysInput.map((v) => toInt(v, 3, 3));
 
-  const [perDayCap, setPerDayCap] = useState(20);
-  const [minGapMinutes, setMinGapMinutes] = useState(6);
+  const [perDayCapInput, setPerDayCapInput] = useState("20");
+  const perDayCap = toInt(perDayCapInput, 20, 1, 50);
+  const [minGapMinutesInput, setMinGapMinutesInput] = useState("6");
+  const minGapMinutes = toInt(minGapMinutesInput, 6, 1);
   const [windowStart, setWindowStart] = useState("10:00");
   const [windowEnd, setWindowEnd] = useState("18:00");
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]);
@@ -82,11 +96,11 @@ export function CampaignWizard({
   function addFollowUp() {
     if (stepTemplateIds.length >= 3) return;
     setStepTemplateIds([...stepTemplateIds, templates[0]?.id ?? ""]);
-    setDelayDays([...delayDays, 3]);
+    setDelayDaysInput([...delayDaysInput, "3"]);
   }
   function removeFollowUp(index: number) {
     setStepTemplateIds(stepTemplateIds.filter((_, i) => i !== index));
-    setDelayDays(delayDays.filter((_, i) => i !== index - 1));
+    setDelayDaysInput(delayDaysInput.filter((_, i) => i !== index - 1));
   }
   function toggleDay(iso: number) {
     setDaysOfWeek((prev) => (prev.includes(iso) ? prev.filter((d) => d !== iso) : [...prev, iso].sort()));
@@ -262,13 +276,20 @@ export function CampaignWizard({
               </select>
               <div className="flex items-center gap-2">
                 <input
-                  type="number"
-                  min={3}
-                  value={delayDays[i] ?? 3}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={delayDaysInput[i] ?? "3"}
                   onChange={(e) => {
-                    const next = [...delayDays];
-                    next[i] = Math.max(3, Number(e.target.value));
-                    setDelayDays(next);
+                    if (!/^\d*$/.test(e.target.value)) return;
+                    const next = [...delayDaysInput];
+                    next[i] = e.target.value;
+                    setDelayDaysInput(next);
+                  }}
+                  onBlur={() => {
+                    const next = [...delayDaysInput];
+                    next[i] = String(toInt(next[i] ?? "3", 3, 3));
+                    setDelayDaysInput(next);
                   }}
                   className={inputClass}
                 />
@@ -287,21 +308,28 @@ export function CampaignWizard({
           <div>
             <label className="mb-1 block text-xs font-medium text-muted">Per day</label>
             <input
-              type="number"
-              min={1}
-              max={50}
-              value={perDayCap}
-              onChange={(e) => setPerDayCap(Math.min(50, Math.max(1, Number(e.target.value))))}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={perDayCapInput}
+              onChange={(e) => {
+                if (/^\d*$/.test(e.target.value)) setPerDayCapInput(e.target.value);
+              }}
+              onBlur={() => setPerDayCapInput(String(toInt(perDayCapInput, 20, 1, 50)))}
               className={inputClass}
             />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted">Min gap (minutes)</label>
             <input
-              type="number"
-              min={1}
-              value={minGapMinutes}
-              onChange={(e) => setMinGapMinutes(Math.max(1, Number(e.target.value)))}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={minGapMinutesInput}
+              onChange={(e) => {
+                if (/^\d*$/.test(e.target.value)) setMinGapMinutesInput(e.target.value);
+              }}
+              onBlur={() => setMinGapMinutesInput(String(toInt(minGapMinutesInput, 6, 1)))}
               className={inputClass}
             />
           </div>

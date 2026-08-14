@@ -155,7 +155,12 @@ export async function registerTickJob(
       }
       logger.debug({ claimed: claimed.length }, "tick processed");
     },
-    { connection }
+    // drainDelay is in SECONDS — how long to long-poll Redis before re-checking an empty
+    // queue. Default (5s) means 4 idle workers hammer Upstash with a Redis command roughly
+    // every 5s forever, which burns through a pay-per-command plan fast. The scheduler only
+    // enqueues a tick once every TICK_INTERVAL_MS anyway, so there is nothing to gain from
+    // polling faster than that — a real job push still wakes the blocking call immediately.
+    { connection, drainDelay: 55 }
   );
 
   worker.on("error", (err) => logger.error({ err }, "scheduler worker error"));

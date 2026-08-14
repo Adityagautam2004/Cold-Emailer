@@ -222,7 +222,9 @@ export async function registerPollInboxJob(connection: ConnectionOptions): Promi
       const count = await pollDueInboxes();
       if (count > 0) logger.debug({ count }, "poll-inbox: polled due accounts");
     },
-    { connection }
+    // See tick.ts for why drainDelay (seconds) is raised — this job only fires every 15
+    // minutes, so idle-polling every 5s wastes Redis commands for no benefit.
+    { connection, drainDelay: 55 }
   );
   worker.on("error", (err) => logger.error({ err }, "poll-inbox worker error"));
 
