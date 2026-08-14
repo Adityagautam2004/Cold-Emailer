@@ -108,11 +108,14 @@ describe("worker tick mechanics (§10.2, §19)", () => {
   });
 
   it("does not claim a send scheduled in the future", async () => {
+    // claimDueSends() is intentionally global — scope the assertion to this test's own row
+    // rather than the raw claimed count, since another concurrently-running test file's
+    // fixture can have a genuinely due row in the shared dev DB at the same instant.
     const contact = await makeContact(`future-${stamp}@example.com`);
-    await makeSend(contact.id, { scheduledAt: new Date(Date.now() + 60 * 60 * 1000) });
+    const futureSend = await makeSend(contact.id, { scheduledAt: new Date(Date.now() + 60 * 60 * 1000) });
 
     const claimed = await claimDueSends();
-    expect(claimed).toHaveLength(0);
+    expect(claimed.some((c) => c.id === futureSend.id)).toBe(false);
   });
 
   it("sweeps a send stuck in claimed for more than 10 minutes back to queued", async () => {
@@ -160,6 +163,44 @@ describe("worker tick mechanics (§10.2, §19)", () => {
     const after = await prisma.send.findUnique({ where: { id: send.id } });
     expect(after?.status).toBe("claimed"); // requeue() would have flipped this back to "queued"
     expect(after?.scheduledAt.getTime()).toBe(scheduledAt.getTime()); // untouched — not pushed to nextEligibleWindowStart
+  });
+
+  it("consumes quota and hands off to the send queue while sentToday is below the effective cap (§19)", async () => {
+    await prisma.campaign.update({ where: { id: campaignId }, data: { perDayCap: 2 } });
+    await prisma.emailAccount.update({ where: { id: emailAccountId }, data: { sentToday: 1 } }); // one below the cap
+
+    const contact = await makeContact(`cap-ok-${stamp}@example.com`);
+    const send = await makeSend(contact.id, { status: "claimed" });
+
+    const added: unknown[] = [];
+    const fakeQueue = { add: async (...args: unknown[]) => added.push(args) } as unknown as Queue;
+
+    await processClaimedSend(send.id, new Set(), fakeQueue);
+
+    expect(added).toHaveLength(1); // handed off — quota had room
+    const account = await prisma.emailAccount.findUnique({ where: { id: emailAccountId } });
+    expect(account?.sentToday).toBe(2); // consumed atomically
+  });
+
+  it("refuses the cap+1th send — requeues without incrementing sentToday past the effective cap (§19)", async () => {
+    await prisma.campaign.update({ where: { id: campaignId }, data: { perDayCap: 2 } });
+    await prisma.emailAccount.update({ where: { id: emailAccountId }, data: { sentToday: 2 } }); // already at the cap
+
+    const contact = await makeContact(`cap-refused-${stamp}@example.com`);
+    const send = await makeSend(contact.id, { status: "claimed" });
+
+    const added: unknown[] = [];
+    const fakeQueue = { add: async (...args: unknown[]) => added.push(args) } as unknown as Queue;
+
+    await processClaimedSend(send.id, new Set(), fakeQueue);
+
+    expect(added).toHaveLength(0); // never handed off
+    const account = await prisma.emailAccount.findUnique({ where: { id: emailAccountId } });
+    expect(account?.sentToday).toBe(2); // unchanged — never exceeds the cap
+
+    const after = await prisma.send.findUnique({ where: { id: send.id } });
+    expect(after?.status).toBe("queued"); // requeued, not left claimed or marked failed
+    expect(after?.scheduledAt.getTime()).toBeGreaterThan(Date.now()); // pushed to a future eligible window
   });
 
   it("still defers a send that is genuinely stale (outside window and past the grace period)", async () => {

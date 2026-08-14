@@ -93,6 +93,7 @@ aliases (see the setup checklist's test-alias section).
 | `npm run prisma:migrate` | Apply schema changes locally (`prisma migrate dev`) |
 | `npm run prisma:deploy` | Apply migrations in production (`prisma migrate deploy`) |
 | `npm run prisma:studio` | Browse the database |
+| `npm run rotate-encryption-key` | Rotate `ENCRYPTION_KEY` — see `OPERATIONS.md` |
 | `npm run typecheck` | TypeScript across every workspace |
 | `npm run lint` | ESLint (web app) |
 | `npm test` | vitest — unit tests in `packages/core`, integration tests where noted |

@@ -3,6 +3,70 @@
 Running log of anywhere this build deviated from, or filled a silent gap in,
 `BUILD_SPEC.md`. Newest first.
 
+## 2026-08-14 — Closing out (docs, ops, §19 test audit)
+
+**Phase 8 (Gmail OAuth sender) was skipped by explicit user choice**, not an oversight —
+it's marked optional in §16, and needs a real Google Cloud project with the sensitive
+`gmail.send` scope configured, which nothing in this environment has. The `EmailSender`
+interface (§8.1) already has the `gmail_oauth` branch stubbed in `createSender()`
+(throws a clear "not enabled" error) specifically so adding it later never touches the
+scheduler — that was the point of the abstraction.
+
+**Audited §19's required test coverage against what's actually a committed `*.test.ts`
+file**, not just "was verified once via a live script that's since been deleted" (several
+of Phase 5's live-acceptance findings fell into that second category). Found three real
+gaps and closed all of them:
+
+- "Campaign start creates exactly N sends" and "starting twice creates no duplicates" had
+  no persisted test — only ever checked via the Phase 5 acceptance script. Fixed by
+  extracting the route's inline logic into a new `startCampaign()` in
+  `apps/web/src/lib/campaigns.ts` (the route handler is now a thin wrapper), which is
+  directly testable against real Postgres without needing an authenticated HTTP request —
+  the same "extract to a userId-scoped helper" pattern every other route already follows.
+  New tests in `apps/web/src/lib/campaigns.test.ts`.
+- "Quota refuses the cap+1th" had no integration test — only unit tests of the pure
+  `effectiveDailyCap` function in isolation, never exercised against a real claimed `Send`
+  and a real `EmailAccount.sentToday`. Added two paired tests to `tick.test.ts`
+  (`processClaimedSend`, already exported): one send succeeds one below the cap, the next
+  is refused and requeued without incrementing `sentToday` past it.
+- Templates had no ownership/auth test at all (`getOwnedTemplate` existed, untested) —
+  resumes/lists/email-accounts all had this coverage, templates and campaigns didn't. Added
+  `apps/web/src/lib/templates.test.ts` (ownership + `ensureSeedTemplates` idempotency) and
+  the `getOwnedCampaign` case in the new `campaigns.test.ts` above.
+
+No route in the app is tested as a literal HTTP 401/403/404 response (`apiRoute`'s
+`requireUser()` call needs a real `next-auth` session context that isn't available in a
+plain vitest environment) — every "auth" test in this codebase instead tests the
+`getOwned*(userId, id)` helper directly, which is the actual authorization boundary every
+route delegates to. This was true before this audit too; noted here as a conscious
+boundary, not a newly-discovered gap: the helpers are where cross-user access is actually
+prevented, and `requireUser()`'s own 401 behavior is separately covered in
+`require-user.test.ts`.
+
+**Found and fixed a real bug in one of the new tests' own cleanup, while writing it**:
+`campaigns.test.ts`'s fixture emails were `campaigns-test-a-${stamp}-...` /
+`campaigns-test-b-${stamp}-...`, but its `afterAll` searched for
+`contains: "campaigns-test-${stamp}"` — the `-a-`/`-b-` infix between `test-` and the
+stamp meant that substring never actually matched, so cleanup silently did nothing on
+every run. Caught by directly querying for leftover rows after a run instead of trusting
+the test suite's own green checkmarks — a passing test file says nothing about whether
+its cleanup hook actually worked. Fixed by matching on the stamp alone
+(`contains: String(stamp)`), and 8 already-leftover fixture rows from earlier runs were
+deleted by hand.
+
+**`OPERATIONS.md`'s `ENCRYPTION_KEY` rotation script was verified against the real dev
+database**, not just read over: created a throwaway `EmailAccount` row encrypted under a
+known test "old" key (`aaa...a`), ran the actual `scripts/rotate-encryption-key.mjs` with
+that as `OLD_ENCRYPTION_KEY` and a different test "new" key as `ENCRYPTION_KEY` (both
+passed as one-off environment variables — the real `.env`'s `ENCRYPTION_KEY` was never
+touched), and confirmed the stored ciphertext now decrypts under the new key with the
+original plaintext intact and no longer decrypts under the old one. The script's
+unconditional `findMany` over every `EmailAccount` is safe to run this way even with a
+DB that has other real rows under a different actual key — each row is decrypt-attempted
+independently and a failure just logs a skip rather than corrupting anything, which is
+exactly what let this test run directly against the shared dev database without
+disturbing unrelated rows.
+
 ## 2026-08-14 — Phase 7
 
 **Major bug, present since Phase 2/3/5 and only caught now by actually loading pages in a
