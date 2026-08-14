@@ -3,6 +3,34 @@
 Running log of anywhere this build deviated from, or filled a silent gap in,
 `BUILD_SPEC.md`. Newest first.
 
+## 2026-08-14 — Phase 2
+
+**The onboarding wizard's "Connect Gmail" and "Send test email" steps share one UI panel
+(`EmailAccountManager`)** rather than being two separate screens. §14 lists them as
+distinct steps, and they're tracked as distinct completion checkpoints in the stepper —
+but the actual "send test email" button naturally lives right where the account just got
+connected, and forcing an extra screen transition to reach a button that's already visible
+would be worse UX for no real benefit. The hard constraint this preserves is the one that
+actually matters: `verifiedAt` is what gates campaign creation, not screen count.
+
+**Reconnecting a mailbox (new app password after Gmail revokes the old one) does not
+reset `warmupStartedAt`.** It's the same mailbox with the same sending history — resetting
+would be pointless (it can only lower the cap, never raise it) and would make the warmup
+stage display lie about how long the account has actually been sending.
+
+**Verified the SMTP error-classification pipeline against real Gmail**, deliberately: a
+connect request with a wrong app password against real `smtp.gmail.com:465` was rejected
+by Gmail's actual server, correctly classified as an `account`-class error, and surfaced
+the exact copy from §8.2's own example — "Gmail rejected the app password. Generate a new
+one and reconnect." — not a generic "Auth error." Also confirmed a failed connect attempt
+never creates an `EmailAccount` row (verify() runs before any Prisma write).
+
+**What still needs your own Gmail app password:** actually succeeding at connecting an
+account and receiving the test email in a real inbox. Everything downstream of a
+successful `verify()` call — encryption, the safe-select shape, warmup display, reconnect
+— is code-reviewable and the credentialEnc-never-leaks guarantee is covered by a real
+integration test, but a genuine end-to-end "it arrived in my inbox" check needs you.
+
 ## 2026-08-14 — Phase 1
 
 **Split the Auth.js config into `auth.config.ts` (Edge-safe) and `auth.ts` (full).**

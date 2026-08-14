@@ -19,14 +19,16 @@ export default async function DashboardPage() {
 
       <div className="mt-8 rounded-lg border border-line bg-surface p-6">
         <h2 className="font-medium">Get set up</h2>
-        <ol className="mt-3 space-y-2 text-sm text-muted">
-          <li>
-            1. <Link href="/resumes" className="text-accent underline underline-offset-2">Upload your resume</Link>
-          </li>
-          <li>2. Connect your Gmail (Settings) — coming next</li>
-          <li>3. Build a template and import a contact list</li>
-          <li>4. Start a campaign</li>
-        </ol>
+        <p className="mt-2 text-sm text-muted">
+          Profile, Gmail connection, resume, and the test email that verifies your mailbox
+          — all four in one place.
+        </p>
+        <Link
+          href="/onboarding"
+          className="mt-4 inline-block rounded-md bg-accent px-4 py-2 text-sm font-medium text-text transition-standard hover:opacity-90"
+        >
+          Continue setup
+        </Link>
       </div>
     </div>
   );
