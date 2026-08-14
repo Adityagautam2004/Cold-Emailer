@@ -3,6 +3,35 @@
 Running log of anywhere this build deviated from, or filled a silent gap in,
 `BUILD_SPEC.md`. Newest first.
 
+## 2026-08-14 — Phase 4
+
+**Mapping and the pre-commit report run entirely client-side**, reusing the exact same
+pure functions from `packages/core` (`guessColumnMapping`, `bucketRows`,
+`formatImportSummary`, `rejectedRowsToCsv`) that the fixture test exercises. Only the
+initial parse (`POST /api/lists/import/parse`, needs `exceljs` + the file bytes) and the
+final commit (`POST /api/lists`, needs the DB) touch the server. This means what the user
+previews in the report step is provably the same computation as the fixture test, not a
+second parallel implementation that could drift from it.
+
+**"Already contacted" is read off `Contact.status` (`notIn: ["pending","skipped"]`), not
+a Send/Campaign join.** §11 says "already sent to in any previous campaign"; since
+`Contact.status` is exactly what Phase 5's worker mutates to `sent`/`replied`/`bounced` as
+campaigns run, checking it directly is equivalent to the join and much cheaper. Verified
+directly against the DB (Phase 5's engine doesn't exist yet to produce this state
+naturally): a contact manually set to `status: "sent"` is correctly excluded on a later
+import, one left `pending` for the same list is not, and a `Suppression` row excludes
+independently of `Contact.status` — all scoped per-user via `partitionAgainstUserHistory`.
+
+**Built `fixtures/contacts-messy.xlsx` to match the exact scenario named in the build
+spec** (blank row, duplicate emails differing only in case, one malformed address, one
+`careers@`, a stray repeated header row) and hand-verified the arithmetic before writing
+the assertion: 9 sheet rows → 1 blank (excluded) → 7 read → 3 import / 1 duplicate / 2
+invalid (the malformed one and the stray header row, whose "email" cell is literally the
+text "Email") / 1 role-skipped. `bucketRows`'s bucket categories are mutually exclusive
+and exhaustive by construction (see Phase 0 notes), so `totalRowsRead` equals the sum of
+the four buckets exactly — this is what "every count in the report is exactly right"
+means operationally here, verified in `import.fixture.test.ts`.
+
 ## 2026-08-14 — Phase 3
 
 **The 3 seed templates are per-user, created lazily on first `GET /api/templates`**, not a
