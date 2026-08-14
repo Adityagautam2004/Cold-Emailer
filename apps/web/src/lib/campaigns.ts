@@ -13,6 +13,38 @@ export async function getOwnedCampaign(userId: string, campaignId: string) {
   return campaign;
 }
 
+export interface CampaignStats {
+  total: number;
+  queued: number;
+  sent: number;
+  replied: number;
+  bouncedOrFailed: number;
+}
+
+/**
+ * `Send.status` has no "replied" or "bounced" value (see schema) — a reply doesn't change
+ * the Send row that was already sent, and a bounce marks the Send `failed`, not `bounced`.
+ * "Replied" has to come from `Contact.status` instead, scoped to contacts that actually
+ * have a Send in this specific campaign (a list can in principle be reused across more than
+ * one campaign).
+ */
+export async function getCampaignStats(campaignId: string, listId: string): Promise<CampaignStats> {
+  const [statusCounts, repliedCount] = await Promise.all([
+    prisma.send.groupBy({ by: ["status"], where: { campaignId }, _count: { _all: true } }),
+    prisma.contact.count({ where: { listId, status: "replied", sends: { some: { campaignId } } } }),
+  ]);
+  const byStatus = Object.fromEntries(statusCounts.map((s) => [s.status, s._count._all]));
+  const total = Object.values(byStatus).reduce((a: number, b) => a + b, 0);
+
+  return {
+    total,
+    queued: (byStatus.queued ?? 0) + (byStatus.claimed ?? 0),
+    sent: byStatus.sent ?? 0,
+    replied: repliedCount,
+    bouncedOrFailed: byStatus.failed ?? 0,
+  };
+}
+
 const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 export interface CampaignPaceInput {

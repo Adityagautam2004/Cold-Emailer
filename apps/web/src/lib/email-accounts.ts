@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@dispatch/db";
-import type { ClassifiedError } from "@dispatch/core";
+import type { ClassifiedError } from "@dispatch/core/src/sender/errors.js";
 import { NotFoundError } from "./api-errors";
 
 /**

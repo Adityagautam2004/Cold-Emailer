@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { bucketRows, guessColumnMapping, parseSpreadsheet } from "./import.js";
+import { bucketRows, guessColumnMapping } from "./import.js";
+import { parseSpreadsheet } from "./spreadsheet-parser.js";
 
 // §4/§19 — a deliberately messy fixture (blank row, duplicate emails in different cases,
 // one malformed address, one careers@, a stray repeated header row) with exact expected

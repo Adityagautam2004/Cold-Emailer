@@ -1,11 +1,11 @@
 import {
-  decrypt,
   extractLikelyBouncedRecipient,
   extractReferencedMessageIds,
   isBounceSenderAddress,
   isDsnContentType,
   parseDsnRecipient,
 } from "@dispatch/core";
+import { decrypt } from "@dispatch/core/src/crypto.js";
 import { logger } from "@dispatch/config";
 import { prisma, suppressEmailCascade } from "@dispatch/db";
 import { AuthenticationFailure, ImapFlow } from "imapflow";

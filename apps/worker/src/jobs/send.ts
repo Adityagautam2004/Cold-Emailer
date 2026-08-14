@@ -1,17 +1,16 @@
 import {
   appendOptOut,
   buildListUnsubscribeHeaders,
-  buildUnsubscribeUrl,
-  classifySendError,
   computeSlots,
-  createSender,
-  decrypt,
-  generateMessageId,
-  nextRetryDelayMs,
   renderTemplate,
+  resolveFollowUpThreading,
   resumeAttachmentFilename,
-  threadSubject,
 } from "@dispatch/core";
+import { decrypt } from "@dispatch/core/src/crypto.js";
+import { generateMessageId } from "@dispatch/core/src/message-id.js";
+import { classifySendError, nextRetryDelayMs } from "@dispatch/core/src/sender/errors.js";
+import { createSender } from "@dispatch/core/src/sender/index.js";
+import { buildUnsubscribeUrl } from "@dispatch/core/src/unsubscribe.js";
 import { env, logger } from "@dispatch/config";
 import { Prisma, prisma } from "@dispatch/db";
 import { Worker, type ConnectionOptions } from "bullmq";
@@ -103,14 +102,21 @@ export async function processSend(sendId: string): Promise<void> {
   let references: string[] | undefined;
 
   if (step.stepOrder > 0) {
-    const step0Send = await prisma.send.findFirst({
-      where: { campaignId: campaign.id, contactId: contact.id, step: { stepOrder: 0 } },
-    });
-    if (step0Send?.renderedSubject) finalSubject = threadSubject(step0Send.renderedSubject);
-    if (step0Send?.providerMessageId) {
-      inReplyTo = step0Send.providerMessageId;
-      references = [step0Send.providerMessageId];
-    }
+    const anchorSelect = { renderedSubject: true, providerMessageId: true } as const;
+    const [rootSend, priorSend] = await Promise.all([
+      prisma.send.findFirst({ where: { campaignId: campaign.id, contactId: contact.id, step: { stepOrder: 0 } }, select: anchorSelect }),
+      step.stepOrder === 1
+        ? Promise.resolve(null)
+        : prisma.send.findFirst({
+            where: { campaignId: campaign.id, contactId: contact.id, step: { stepOrder: step.stepOrder - 1 } },
+            select: anchorSelect,
+          }),
+    ]);
+    // Step 1's own immediately-preceding step IS the root — no second row to fetch.
+    const threading = resolveFollowUpThreading(rootSend, priorSend ?? rootSend);
+    if (threading.subject) finalSubject = threading.subject;
+    inReplyTo = threading.inReplyTo;
+    references = threading.references;
   }
 
   const unsubscribeUrl = buildUnsubscribeUrl(env.APP_URL, { userId: user.id, email: contact.email }, env.UNSUBSCRIBE_SECRET);

@@ -1,4 +1,6 @@
-import { classifySendError, createSender, encrypt } from "@dispatch/core";
+import { encrypt } from "@dispatch/core/src/crypto.js";
+import { classifySendError } from "@dispatch/core/src/sender/errors.js";
+import { createSender } from "@dispatch/core/src/sender/index.js";
 import { prisma } from "@dispatch/db";
 import { NextResponse } from "next/server";
 import { z } from "zod";

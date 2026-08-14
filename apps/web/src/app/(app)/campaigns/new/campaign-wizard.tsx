@@ -3,6 +3,7 @@
 import { computeSlots, warmupStage } from "@dispatch/core";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { DispatchStrip } from "@/components/dispatch-strip";
 import { cn } from "@/lib/utils";
 
 interface ListRow {
@@ -113,7 +114,8 @@ export function CampaignWizard({
         total: slots.length,
         first: slots[0],
         last: slots[slots.length - 1],
-        perDay: [...byDay.entries()],
+        days: byDay.size,
+        slots,
       };
     } catch {
       return null;
@@ -347,7 +349,7 @@ export function CampaignWizard({
                 </div>
                 <div>
                   <dt className="text-xs text-muted">Days</dt>
-                  <dd className="font-mono">{preview.perDay.length}</dd>
+                  <dd className="font-mono">{preview.days}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted">First send</dt>
@@ -359,19 +361,13 @@ export function CampaignWizard({
                 </div>
               </dl>
 
-              <div className="mt-4 space-y-1">
-                {preview.perDay.map(([day, count]) => (
-                  <div key={day} className="flex items-center gap-2 text-xs">
-                    <span className="w-24 font-mono text-muted">{day}</span>
-                    <div className="h-2 flex-1 rounded-full bg-line">
-                      <div
-                        className="h-2 rounded-full bg-pending"
-                        style={{ width: `${Math.min(100, (count / perDayCap) * 100)}%` }}
-                      />
-                    </div>
-                    <span className="w-6 text-right font-mono">{count}</span>
-                  </div>
-                ))}
+              <div className="mt-4">
+                <DispatchStrip
+                  ticks={preview.slots.map((s) => ({ date: s, status: "queued" as const }))}
+                  windowStart={windowStart}
+                  windowEnd={windowEnd}
+                  timezone={timezone}
+                />
               </div>
             </>
           )}

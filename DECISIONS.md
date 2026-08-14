@@ -3,6 +3,81 @@
 Running log of anywhere this build deviated from, or filled a silent gap in,
 `BUILD_SPEC.md`. Newest first.
 
+## 2026-08-14 — Phase 7
+
+**Major bug, present since Phase 2/3/5 and only caught now by actually loading pages in a
+live browser session rather than only hitting API routes:** every page whose client
+component imported *anything* from the `@dispatch/core` barrel (`/campaigns/new`,
+`/resumes`, `/templates`, `/lists/import`, `/settings`) crashed with a 500 — first
+`nodemailer`'s DKIM module failing to resolve `fs`, then (after fixing that) `node:crypto`
+failing the same way from three other files. Root cause: the barrel (`packages/core/src/index.ts`)
+re-exported everything, including several modules that import real Node built-ins
+unconditionally — `crypto.ts` and the new `message-id.ts`/`unsubscribe.ts` need
+`node:crypto`, `spreadsheet-parser.ts` (split out of `import.ts`) needs `node:stream` via
+exceljs, and `sender/*` pulls in all of `nodemailer` (which itself needs `fs`/`net`/`tls`).
+Next.js's `transpilePackages` setting processes this workspace package's own TS source
+directly rather than treating it as pre-built, and webpack **dev** builds don't eliminate
+an unused barrel re-export the way a production build's tree-shaking might — tried adding
+`"sideEffects": false` to `packages/core/package.json` first (harmless, kept, but
+insufficient: it only helps a **production** build's dead-code elimination, and `next dev`
+doesn't do that kind of elimination at all). This means a `next build` might well have
+hidden this bug entirely while `next dev` did not — worth remembering the two modes aren't
+equivalent for this class of problem, and thorough manual/API-route testing is not a
+substitute for actually loading the page.
+
+**The actual fix: these five modules are simply never re-exported from the main barrel at
+all** (not "exported but tree-shaken" — genuinely absent from `index.ts`'s import graph,
+which is the only guarantee that holds in both dev and prod regardless of bundler
+optimization behavior): `crypto.js`, `message-id.js` (a new file — `generateMessageId` was
+split out of `mail.ts` for exactly this reason), `unsubscribe.js`, `spreadsheet-parser.js`
+(split out of `import.ts`, same reason), `sender/index.js`, `sender/errors.js`. Every
+genuinely server-only consumer (`apps/worker`, and `apps/web`'s API routes/lib files —
+never a "use client" component) imports these by explicit subpath instead, e.g.
+`@dispatch/core/src/crypto.js`. `packages/core`'s `package.json` has no `"exports"` map, so
+Node/webpack's legacy resolution permits this without any package config change, and the
+existing `next.config.ts` `extensionAlias` (`.js` → `.ts`) already applies uniformly to
+every subpath resolution, not just relative imports. Caught by extending live verification
+beyond API routes to actually requesting every affected page through a real signed-in,
+ToS-accepted session and checking for 200s — this should be a standing practice, not a
+one-time check, whenever a new "use client" component starts importing from
+`@dispatch/core`.
+
+**Two real, unrelated correctness bugs found and fixed while building this phase's own
+features, both pre-existing (Phase 5):**
+
+1. The campaign detail page's "Replied" stat always showed 0. `Send.status` has no
+   `"replied"` value (see the schema) — a reply doesn't change the `Send` row that was
+   already sent, it changes `Contact.status`. The original code did
+   `prisma.send.groupBy({by: ["status"], ...})` and read `stats.replied`, which could never
+   exist. Fixed via a new `getCampaignStats()` helper (`apps/web/src/lib/campaigns.ts`) that
+   counts `Contact.count({where: {listId, status: "replied", sends: {some: {campaignId}}}})`
+   instead — scoped to contacts with an actual `Send` in *this* campaign, since a list can in
+   principle be reused across more than one campaign. Same helper now backs both the
+   detail page and the dashboard's active-campaigns list, so there's one counting
+   implementation, not two that could drift.
+
+2. Follow-up threading (`processSend` in `apps/worker/src/jobs/send.ts`) always set
+   `In-Reply-To`/`References` from **step 0's** `providerMessageId`, regardless of which
+   step was being sent. §10.3 says "the prior step's providerMessageId" — for a 3-step
+   campaign, step 2 (the second follow-up) should thread off step 1, not step 0. Only
+   surfaces with a 3-step campaign (2 follow-ups), which nothing had exercised yet. Fixed
+   via a new pure `resolveFollowUpThreading()` in `packages/core/src/mail.ts`
+   (unit-tested): the **subject** still always traces back to the root (step 0) — mail
+   clients group by subject text, and a follow-up's own template subject read as "Re:
+   <something else>" looks like a second cold email — but `In-Reply-To`/`References` now
+   correctly reference the *immediately preceding* step.
+
+**The dispatch strip (§15's signature element) is one shared component**
+(`apps/web/src/components/dispatch-strip.tsx`), used identically on `/campaigns/[id]`
+(real `Send` data, via a small server-component wrapper that derives each tick's colour
+from `Send.status` + the linked `Contact.status`) and in the campaign builder's review
+step (a `computeSlots()` preview, every tick "queued" since nothing exists yet) — per
+spec's explicit "on `/campaigns/[id]` **and** in the campaign review step." Implemented as
+plain divs with percentage-based absolute positioning (a day column's height represents a
+full 24h, ticks placed at `minutesOfDay / 1440`), not SVG or a charting library — simple
+enough not to warrant one, and it needs to render correctly during SSR before any client
+JS runs.
+
 ## 2026-08-14 — Phase 6
 
 **Reply, bounce, and unsubscribe all share one cascade helper** (`suppressEmailCascade` in

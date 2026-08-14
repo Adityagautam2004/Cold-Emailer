@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
-import { prisma } from "@dispatch/db";
 import { NotFoundError } from "@/lib/api-errors";
-import { getOwnedCampaign } from "@/lib/campaigns";
+import { getCampaignStats, getOwnedCampaign } from "@/lib/campaigns";
 import { requireUser } from "@/lib/require-user";
 import { CampaignControls } from "./campaign-controls";
+import { DispatchStripSection } from "./dispatch-strip-section";
 import { SendLog } from "./send-log";
 
 export default async function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -18,13 +18,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
     throw err;
   }
 
-  const statusCounts = await prisma.send.groupBy({
-    by: ["status"],
-    where: { campaignId: campaign.id },
-    _count: { _all: true },
-  });
-  const stats = Object.fromEntries(statusCounts.map((s) => [s.status, s._count._all]));
-  const total = Object.values(stats).reduce((a, b) => a + b, 0);
+  const stats = await getCampaignStats(campaign.id, campaign.listId);
 
   return (
     <div>
@@ -41,23 +35,23 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
       <dl className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-5">
         <div className="rounded-lg border border-line bg-surface p-4">
           <dt className="text-xs text-muted">Total</dt>
-          <dd className="font-mono text-xl">{total}</dd>
+          <dd className="font-mono text-xl">{stats.total}</dd>
         </div>
         <div className="rounded-lg border border-line bg-surface p-4">
           <dt className="text-xs text-muted">Queued</dt>
-          <dd className="font-mono text-xl text-pending">{stats.queued ?? 0}</dd>
+          <dd className="font-mono text-xl text-pending">{stats.queued}</dd>
         </div>
         <div className="rounded-lg border border-line bg-surface p-4">
           <dt className="text-xs text-muted">Sent</dt>
-          <dd className="font-mono text-xl">{stats.sent ?? 0}</dd>
+          <dd className="font-mono text-xl">{stats.sent}</dd>
         </div>
         <div className="rounded-lg border border-line bg-surface p-4">
           <dt className="text-xs text-muted">Replied</dt>
-          <dd className="font-mono text-xl text-good">{stats.replied ?? 0}</dd>
+          <dd className="font-mono text-xl text-good">{stats.replied}</dd>
         </div>
         <div className="rounded-lg border border-line bg-surface p-4">
           <dt className="text-xs text-muted">Bounced / failed</dt>
-          <dd className="font-mono text-xl text-bad">{(stats.bounced ?? 0) + (stats.failed ?? 0)}</dd>
+          <dd className="font-mono text-xl text-bad">{stats.bouncedOrFailed}</dd>
         </div>
       </dl>
 
@@ -66,6 +60,13 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
           Paused: {campaign.pauseReason}
         </div>
       )}
+
+      <div className="mt-8">
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Dispatch strip</p>
+        <div className="rounded-lg border border-line bg-surface p-4">
+          <DispatchStripSection campaignId={campaign.id} windowStart={campaign.windowStart} windowEnd={campaign.windowEnd} timezone={campaign.timezone} />
+        </div>
+      </div>
 
       <div className="mt-8">
         <SendLog campaignId={campaign.id} />

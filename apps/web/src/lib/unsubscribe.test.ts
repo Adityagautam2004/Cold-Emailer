@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { generateUnsubscribeToken } from "@dispatch/core";
+import { generateUnsubscribeToken } from "@dispatch/core/src/unsubscribe.js";
 import { env } from "@dispatch/config";
 import { prisma } from "@dispatch/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";

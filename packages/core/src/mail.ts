@@ -1,13 +1,5 @@
-import { randomBytes } from "node:crypto";
-
 /** §8.3 — reject a resume upload larger than this at the upload step, with a clear message. */
 export const MAX_RESUME_SIZE_BYTES = 2 * 1024 * 1024;
-
-/** `<{sendId}.{random}@{domain}>` — this is the join key for reply detection, so it must be unique per send. */
-export function generateMessageId(sendId: string, domain: string): string {
-  const random = randomBytes(8).toString("hex");
-  return `<${sendId}.${random}@${domain}>`;
-}
 
 const URL_RE = /\bhttps?:\/\/[^\s<>"]+/g;
 
@@ -56,4 +48,33 @@ export function resumeAttachmentFilename(studentName: string): string {
 
 export function threadSubject(subject: string): string {
   return /^re:/i.test(subject.trim()) ? subject : `Re: ${subject}`;
+}
+
+export interface ThreadAnchor {
+  providerMessageId: string | null;
+  renderedSubject: string | null;
+}
+
+export interface FollowUpThreading {
+  /** New subject for the follow-up, or null to leave the step's own rendered subject untouched. */
+  subject: string | null;
+  inReplyTo: string | undefined;
+  references: string[] | undefined;
+}
+
+/**
+ * §10.3 — a follow-up threads off two different anchors for two different reasons. The
+ * subject always traces back to the *root* (step 0): mail clients group by subject text,
+ * and a follow-up's own template subject read as "Re: <something else>" looks like a second
+ * cold email. `In-Reply-To`/`References`, by contrast, must point at the *immediately
+ * preceding* step's Message-ID per §10.3's text ("the prior step's providerMessageId") —
+ * for a 3-step campaign, step 2 threads off step 1, not step 0, or a mail client's raw RFC
+ * 5322 reply-chain view (as opposed to its subject-grouping heuristic) won't line up.
+ */
+export function resolveFollowUpThreading(root: ThreadAnchor | null, immediatePrior: ThreadAnchor | null): FollowUpThreading {
+  return {
+    subject: root?.renderedSubject ? threadSubject(root.renderedSubject) : null,
+    inReplyTo: immediatePrior?.providerMessageId ?? undefined,
+    references: immediatePrior?.providerMessageId ? [immediatePrior.providerMessageId] : undefined,
+  };
 }

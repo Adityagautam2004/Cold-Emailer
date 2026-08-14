@@ -1,6 +1,6 @@
 import { env } from "@dispatch/config";
 import { prisma, suppressEmailCascade } from "@dispatch/db";
-import { verifyUnsubscribeToken } from "@dispatch/core";
+import { verifyUnsubscribeToken } from "@dispatch/core/src/unsubscribe.js";
 
 export type UnsubscribeResult = { ok: true } | { ok: false };
 

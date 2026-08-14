@@ -1,4 +1,5 @@
-import { guessColumnMapping, parseSpreadsheet } from "@dispatch/core";
+import { guessColumnMapping } from "@dispatch/core";
+import { parseSpreadsheet } from "@dispatch/core/src/spreadsheet-parser.js";
 import { NextResponse } from "next/server";
 import { apiRoute, ValidationError } from "@/lib/api-errors";
 import { requireUser } from "@/lib/require-user";

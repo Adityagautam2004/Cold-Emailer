@@ -44,6 +44,20 @@ export function warmupCap(warmupStartedAt: Date, now: Date = new Date()): number
   return warmupStage(warmupStartedAt, now).cap;
 }
 
+// Every stage's minDay except the first (day 0, "just connected" — not a step-up).
+const STEP_UP_DAYS = new Set(WARMUP_TABLE.slice(1).map((row) => row.minDay));
+
+/**
+ * True exactly on the calendar day an account's warmup cap increases — used for the
+ * dashboard's "your account just stepped up" alert (§14). Deliberately stateless: rather
+ * than persisting "the last stage we told the student about" and diffing against it, this
+ * just checks whether `daysSinceConnect` lands exactly on one of the warmup table's
+ * boundaries today. A dashboard load on any other day of that stage returns false.
+ */
+export function justSteppedUp(warmupStartedAt: Date, now: Date = new Date()): boolean {
+  return STEP_UP_DAYS.has(daysBetween(warmupStartedAt, now));
+}
+
 /** min(warmup cap, campaign's own per-day cap, the absolute hard cap). */
 export function effectiveDailyCap(input: {
   warmupStartedAt: Date;

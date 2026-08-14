@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { effectiveDailyCap, HARD_DAILY_CAP, warmupCap, warmupStage } from "./quota.js";
+import { effectiveDailyCap, HARD_DAILY_CAP, justSteppedUp, warmupCap, warmupStage } from "./quota.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const connectedAt = new Date("2026-01-01T00:00:00Z");
@@ -36,6 +36,16 @@ describe("warmup cap table", () => {
   it("has no next step-up once at the ceiling", () => {
     const stage = warmupStage(connectedAt, daysLater(9));
     expect(stage.nextStepUpAt).toBeNull();
+  });
+});
+
+describe("justSteppedUp (§14 dashboard alert)", () => {
+  it.each([3, 6, 9])("is true exactly on stage-boundary day %i", (day) => {
+    expect(justSteppedUp(connectedAt, daysLater(day))).toBe(true);
+  });
+
+  it.each([0, 1, 2, 4, 5, 7, 8, 10, 30])("is false on any other day, including day 0 (initial connect)", (day) => {
+    expect(justSteppedUp(connectedAt, daysLater(day))).toBe(false);
   });
 });
 
