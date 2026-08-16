@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/require-user";
 import { SAFE_EMAIL_ACCOUNT_SELECT } from "@/lib/email-accounts";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmailAccountManager } from "./email-account-manager";
+import { DeleteAccountSection } from "./delete-account-section";
 
 export default async function SettingsPage() {
   const user = await requireUser();
@@ -26,6 +27,8 @@ export default async function SettingsPage() {
           <EmailAccountManager initialAccounts={emailAccounts} />
         </div>
       </section>
+
+      <DeleteAccountSection email={user.email} />
     </div>
   );
 }
