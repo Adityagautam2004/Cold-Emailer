@@ -1,13 +1,14 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { LinkButton } from "@/components/ui/button";
+import { LogoMark, Wordmark } from "@/components/logo";
 
 export default function LandingPage() {
   return (
     <main className="min-h-screen bg-ink text-text">
       <header className="border-b border-line">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-5">
-          <span className="font-display text-lg font-bold">Dispatch</span>
+          <Wordmark size={22} />
           <nav className="flex items-center gap-6 text-sm text-muted">
             <Link href="/terms" className="transition-standard hover:text-text">
               Terms
@@ -20,7 +21,7 @@ export default function LandingPage() {
       </header>
 
       <div className="mx-auto max-w-3xl px-6 py-20 sm:py-28">
-        <p className="font-mono text-xs uppercase tracking-widest text-accent">Dispatch</p>
+        <LogoMark size={40} />
         <h1 className="mt-4 font-display text-4xl font-bold leading-[1.1] tracking-tight sm:text-5xl">
           Cold outreach that paces itself.
         </h1>

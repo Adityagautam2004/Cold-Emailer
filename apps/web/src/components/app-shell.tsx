@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { CurrentUser } from "@/lib/require-user";
 import { Dialog } from "@/components/ui/dialog";
+import { Wordmark } from "@/components/logo";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -59,7 +60,7 @@ function SidebarNav({ pathname, onNavigate }: { pathname: string; onNavigate?: (
 }
 
 function BrandMark() {
-  return <span className="font-display text-lg font-bold text-text">Dispatch</span>;
+  return <Wordmark size={22} />;
 }
 
 function SignOutButton() {

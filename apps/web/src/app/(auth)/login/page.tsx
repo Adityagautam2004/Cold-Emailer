@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FieldError, Input, Label } from "@/components/ui/input";
+import { Wordmark } from "@/components/logo";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -53,8 +54,8 @@ function LoginForm() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-ink px-6 text-text">
       <div className="w-full max-w-sm">
-        <Link href="/" className="font-display text-lg font-bold">
-          Dispatch
+        <Link href="/" className="inline-flex">
+          <Wordmark size={22} />
         </Link>
         <h1 className="mt-6 text-2xl font-bold">Sign in to Dispatch</h1>
         <p className="mt-2 text-sm text-muted">Most students use their college Google account.</p>

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { SAFE_EMAIL_ACCOUNT_SELECT } from "@/lib/email-accounts";
 import { UnauthorizedError } from "@/lib/api-errors";
 import { requireUser } from "@/lib/require-user";
+import { Wordmark } from "@/components/logo";
 import { OnboardingWizard } from "./onboarding-wizard";
 
 export default async function OnboardingPage() {
@@ -39,6 +40,7 @@ export default async function OnboardingPage() {
   return (
     <main className="min-h-screen bg-ink px-6 py-12 text-text">
       <div className="mx-auto max-w-2xl">
+        <Wordmark size={20} className="mb-6" />
         <h1 className="font-display text-2xl font-bold">Get set up</h1>
         <p className="mt-2 text-sm text-muted">Four steps. Come back any time — nothing here is lost.</p>
 

@@ -5,6 +5,7 @@ import { UnauthorizedError } from "@/lib/api-errors";
 import { requireUser } from "@/lib/require-user";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Wordmark } from "@/components/logo";
 
 export default async function AcceptTermsPage() {
   let user;
@@ -29,6 +30,7 @@ export default async function AcceptTermsPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-ink px-6 text-text">
       <Card className="w-full max-w-lg p-8">
+        <Wordmark size={20} className="mb-6" />
         <h1 className="font-display text-2xl font-bold">One thing before you start</h1>
         <p className="mt-3 text-sm text-muted">
           Dispatch sends email on your behalf, from your own mailbox. Before you connect an
