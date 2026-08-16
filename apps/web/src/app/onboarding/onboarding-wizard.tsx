@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { EmailAccountManager } from "@/app/(app)/settings/email-account-manager";
 import { ResumeManager } from "@/app/(app)/resumes/resume-manager";
+import { Button, LinkButton } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { FieldError, Input, Label, Select } from "@/components/ui/input";
 
 interface EmailAccountRow {
   id: string;
@@ -114,7 +117,7 @@ export function OnboardingWizard({
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <ol className="flex flex-wrap gap-2">
           {steps.map((s, i) => (
             <li key={s.key}>
@@ -139,82 +142,48 @@ export function OnboardingWizard({
             </li>
           ))}
         </ol>
-        <Link href="/dashboard" className="shrink-0 text-sm text-muted hover:text-text hover:underline">
+        <Link href="/dashboard" className="shrink-0 text-sm text-muted transition-standard hover:text-text hover:underline">
           Skip to dashboard
         </Link>
       </div>
 
       {allDone && (
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-good/40 bg-good/10 px-4 py-3 text-sm text-good">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-good/40 bg-good-soft px-4 py-3 text-sm text-good">
           <span>You&apos;re fully set up.</span>
-          <Link
-            href="/dashboard"
-            className="rounded-md bg-good px-4 py-1.5 font-medium text-ink transition-standard hover:opacity-90"
-          >
+          <LinkButton href="/dashboard" className="bg-good text-ink hover:bg-good hover:opacity-90">
             Go to dashboard
-          </Link>
+          </LinkButton>
         </div>
       )}
 
       {active === "profile" && (
-        <div className="rounded-lg border border-line bg-surface p-5">
+        <Card className="p-5">
           <h2 className="font-medium">Your profile</h2>
           <form onSubmit={saveProfile} className="mt-4 space-y-3">
             <div>
-              <label htmlFor="name" className="mb-1 block text-xs font-medium text-muted">
-                Name
-              </label>
-              <input
-                id="name"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-md border border-line bg-ink px-3 py-2 text-sm outline-none focus-visible:border-accent"
-              />
+              <Label htmlFor="name">Name</Label>
+              <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div>
-              <label htmlFor="college" className="mb-1 block text-xs font-medium text-muted">
-                College
-              </label>
-              <input
-                id="college"
-                required
-                value={college}
-                onChange={(e) => setCollege(e.target.value)}
-                className="w-full rounded-md border border-line bg-ink px-3 py-2 text-sm outline-none focus-visible:border-accent"
-              />
+              <Label htmlFor="college">College</Label>
+              <Input id="college" required value={college} onChange={(e) => setCollege(e.target.value)} />
             </div>
             <div>
-              <label htmlFor="timezone" className="mb-1 block text-xs font-medium text-muted">
-                Timezone
-              </label>
-              <select
-                id="timezone"
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-                className="w-full rounded-md border border-line bg-ink px-3 py-2 text-sm outline-none focus-visible:border-accent"
-              >
+              <Label htmlFor="timezone">Timezone</Label>
+              <Select id="timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)}>
                 {timezoneOptions.map((tz) => (
                   <option key={tz} value={tz}>
                     {tz}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
-            {profileError && (
-              <p role="alert" className="text-sm text-bad">
-                {profileError}
-              </p>
-            )}
-            <button
-              type="submit"
-              disabled={savingProfile}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text transition-standard hover:opacity-90 disabled:opacity-50"
-            >
-              {savingProfile ? "Saving…" : "Save and continue"}
-            </button>
+            <FieldError>{profileError}</FieldError>
+            <Button type="submit" loading={savingProfile}>
+              Save and continue
+            </Button>
           </form>
-        </div>
+        </Card>
       )}
 
       {active === "email" && (
@@ -224,13 +193,13 @@ export function OnboardingWizard({
       )}
 
       {active === "resume" && (
-        <div className="rounded-lg border border-line bg-surface p-5">
+        <Card className="p-5">
           <ResumeManager initialResumes={resumes} />
-        </div>
+        </Card>
       )}
 
       {active === "verify" && (
-        <div className="rounded-lg border border-line bg-surface p-5">
+        <Card className="p-5">
           <h2 className="font-medium">Send a test email</h2>
           {step4Done ? (
             <p className="mt-2 text-sm text-good">
@@ -248,7 +217,7 @@ export function OnboardingWizard({
               </div>
             </>
           )}
-        </div>
+        </Card>
       )}
     </div>
   );

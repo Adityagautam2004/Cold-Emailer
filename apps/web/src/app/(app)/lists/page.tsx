@@ -1,6 +1,7 @@
-import Link from "next/link";
 import { prisma } from "@dispatch/db";
 import { requireUser } from "@/lib/require-user";
+import { PageHeader } from "@/components/ui/page-header";
+import { LinkButton } from "@/components/ui/button";
 import { ListTable } from "./list-table";
 
 export default async function ListsPage() {
@@ -13,16 +14,7 @@ export default async function ListsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold">Lists</h1>
-        <Link
-          href="/lists/import"
-          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text transition-standard hover:opacity-90"
-        >
-          Import a list
-        </Link>
-      </div>
-
+      <PageHeader title="Lists" actions={<LinkButton href="/lists/import">Import a list</LinkButton>} />
       <ListTable lists={lists} />
     </div>
   );

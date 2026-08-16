@@ -39,7 +39,7 @@ export default async function OnboardingPage() {
   return (
     <main className="min-h-screen bg-ink px-6 py-12 text-text">
       <div className="mx-auto max-w-2xl">
-        <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold">Get set up</h1>
+        <h1 className="font-display text-2xl font-bold">Get set up</h1>
         <p className="mt-2 text-sm text-muted">Four steps. Come back any time — nothing here is lost.</p>
 
         <div className="mt-8">

@@ -1,12 +1,11 @@
+import { PageHeader } from "@/components/ui/page-header";
 import { TemplateEditor } from "../template-editor";
 
 export default function NewTemplatePage() {
   return (
     <div>
-      <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold">New template</h1>
-      <div className="mt-8">
-        <TemplateEditor initial={{ name: "", subject: "", bodyText: "" }} />
-      </div>
+      <PageHeader title="New template" backHref="/templates" backLabel="Back to templates" />
+      <TemplateEditor initial={{ name: "", subject: "", bodyText: "" }} />
     </div>
   );
 }

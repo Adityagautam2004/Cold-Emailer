@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { TableSkeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/table";
 
 interface SendRow {
   id: string;
@@ -13,22 +17,12 @@ interface SendRow {
   step: { stepOrder: number };
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  queued: "text-pending",
-  claimed: "text-pending",
-  sending: "text-pending",
-  sent: "text-good",
-  replied: "text-good",
-  failed: "text-bad",
-  cancelled: "text-muted",
-  skipped: "text-muted",
-};
-
 export function SendLog({ campaignId }: { campaignId: string }) {
   const [sends, setSends] = useState<SendRow[]>([]);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const limit = 100;
 
   useEffect(() => {
@@ -49,52 +43,57 @@ export function SendLog({ campaignId }: { campaignId: string }) {
   }, [campaignId]);
 
   async function loadMore() {
-    const res = await fetch(`/api/campaigns/${campaignId}/sends?limit=${limit}&offset=${offset}`);
-    const body = await res.json();
-    setSends((prev) => [...prev, ...body.sends]);
-    setOffset((prev) => prev + body.sends.length);
-    setHasMore(body.sends.length === limit);
+    setLoadingMore(true);
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/sends?limit=${limit}&offset=${offset}`);
+      const body = await res.json();
+      setSends((prev) => [...prev, ...body.sends]);
+      setOffset((prev) => prev + body.sends.length);
+      setHasMore(body.sends.length === limit);
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
   return (
     <div>
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Send log</h2>
+      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Send log</h2>
       {loading ? (
-        <p className="mt-3 text-sm text-muted">Loading…</p>
+        <TableSkeleton cols={5} />
       ) : sends.length === 0 ? (
-        <p className="mt-3 text-sm text-muted">No sends scheduled yet.</p>
+        <EmptyState title="No sends scheduled yet" />
       ) : (
         <>
-          <table className="mt-3 w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
-                <th className="py-2 pr-4">Scheduled</th>
-                <th className="py-2 pr-4">Contact</th>
-                <th className="py-2 pr-4">Step</th>
-                <th className="py-2 pr-4">Status</th>
-                <th className="py-2 pr-4">Error</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableHeaderCell>Scheduled</TableHeaderCell>
+                <TableHeaderCell>Contact</TableHeaderCell>
+                <TableHeaderCell>Step</TableHeaderCell>
+                <TableHeaderCell>Status</TableHeaderCell>
+                <TableHeaderCell>Error</TableHeaderCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
               {sends.map((s) => (
-                <tr key={s.id} className="border-b border-line">
-                  <td className="py-2 pr-4 font-mono text-xs text-muted">
+                <TableRow key={s.id}>
+                  <TableCell className="whitespace-nowrap font-mono text-xs text-muted">
                     {new Date(s.scheduledAt).toLocaleString()}
-                  </td>
-                  <td className="py-2 pr-4 font-mono text-xs">{s.contact.email}</td>
-                  <td className="py-2 pr-4 font-mono text-xs text-muted">{s.step.stepOrder + 1}</td>
-                  <td className={cn("py-2 pr-4 font-mono text-xs", STATUS_COLOR[s.status] ?? "text-muted")}>
-                    {s.status}
-                  </td>
-                  <td className="py-2 pr-4 text-xs text-bad">{s.lastError ?? ""}</td>
-                </tr>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">{s.contact.email}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted">{s.step.stepOrder + 1}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={s.status} />
+                  </TableCell>
+                  <TableCell className="max-w-xs truncate text-xs text-bad">{s.lastError ?? ""}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
           {hasMore && (
-            <button type="button" onClick={loadMore} className="mt-3 text-sm text-accent hover:underline">
+            <Button variant="ghost" size="sm" loading={loadingMore} onClick={loadMore} className="mt-3">
               Load more
-            </button>
+            </Button>
           )}
         </>
       )}

@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { NotFoundError } from "@/lib/api-errors";
 import { getCampaignStats, getOwnedCampaign } from "@/lib/campaigns";
 import { requireUser } from "@/lib/require-user";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatTile } from "@/components/ui/stat-tile";
 import { CampaignControls } from "./campaign-controls";
 import { DispatchStripSection } from "./dispatch-strip-section";
 import { SendLog } from "./send-log";
@@ -22,41 +24,24 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold">{campaign.name}</h1>
-          <p className="mt-1 font-mono text-sm text-muted">
-            {campaign.status} · {campaign.perDayCap}/day · {campaign.windowStart}–{campaign.windowEnd}
-          </p>
-        </div>
-        <CampaignControls campaignId={campaign.id} status={campaign.status} />
-      </div>
+      <PageHeader
+        title={campaign.name}
+        description={`${campaign.status} · ${campaign.perDayCap}/day · ${campaign.windowStart}–${campaign.windowEnd}`}
+        backHref="/campaigns"
+        backLabel="Back to campaigns"
+        actions={<CampaignControls campaignId={campaign.id} status={campaign.status} />}
+      />
 
-      <dl className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-5">
-        <div className="rounded-lg border border-line bg-surface p-4">
-          <dt className="text-xs text-muted">Total</dt>
-          <dd className="font-mono text-xl">{stats.total}</dd>
-        </div>
-        <div className="rounded-lg border border-line bg-surface p-4">
-          <dt className="text-xs text-muted">Queued</dt>
-          <dd className="font-mono text-xl text-pending">{stats.queued}</dd>
-        </div>
-        <div className="rounded-lg border border-line bg-surface p-4">
-          <dt className="text-xs text-muted">Sent</dt>
-          <dd className="font-mono text-xl">{stats.sent}</dd>
-        </div>
-        <div className="rounded-lg border border-line bg-surface p-4">
-          <dt className="text-xs text-muted">Replied</dt>
-          <dd className="font-mono text-xl text-good">{stats.replied}</dd>
-        </div>
-        <div className="rounded-lg border border-line bg-surface p-4">
-          <dt className="text-xs text-muted">Bounced / failed</dt>
-          <dd className="font-mono text-xl text-bad">{stats.bouncedOrFailed}</dd>
-        </div>
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <StatTile label="Total" value={stats.total} />
+        <StatTile label="Queued" value={stats.queued} tone="pending" />
+        <StatTile label="Sent" value={stats.sent} />
+        <StatTile label="Replied" value={stats.replied} tone="good" />
+        <StatTile label="Bounced / failed" value={stats.bouncedOrFailed} tone="bad" className="col-span-2 sm:col-span-1" />
       </dl>
 
       {campaign.status === "paused" && campaign.pauseReason && (
-        <div className="mt-6 rounded-md border border-pending/40 bg-pending/10 px-4 py-3 text-sm text-pending">
+        <div className="mt-6 rounded-md border border-pending/40 bg-pending-soft px-4 py-3 text-sm text-pending">
           Paused: {campaign.pauseReason}
         </div>
       )}

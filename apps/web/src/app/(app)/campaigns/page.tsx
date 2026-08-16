@@ -1,15 +1,12 @@
+import { Send } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@dispatch/db";
-import { cn } from "@/lib/utils";
 import { requireUser } from "@/lib/require-user";
-
-const STATUS_COLOR: Record<string, string> = {
-  draft: "text-muted",
-  running: "text-good",
-  paused: "text-pending",
-  stopped: "text-bad",
-  completed: "text-good",
-};
+import { PageHeader } from "@/components/ui/page-header";
+import { LinkButton } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/table";
 
 export default async function CampaignsPage() {
   const user = await requireUser();
@@ -21,47 +18,46 @@ export default async function CampaignsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold">Campaigns</h1>
-        <Link
-          href="/campaigns/new"
-          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text transition-standard hover:opacity-90"
-        >
-          New campaign
-        </Link>
-      </div>
+      <PageHeader title="Campaigns" actions={<LinkButton href="/campaigns/new">New campaign</LinkButton>} />
 
       {campaigns.length === 0 ? (
-        <p className="mt-8 text-sm text-muted">No campaigns yet. Pick a list, a resume, and a template to start one.</p>
+        <EmptyState
+          icon={Send}
+          title="No campaigns yet"
+          description="Pick a list, a resume, and a template to start one."
+          action={<LinkButton href="/campaigns/new">New campaign</LinkButton>}
+        />
       ) : (
-        <table className="mt-8 w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
-              <th className="py-2 pr-4">Name</th>
-              <th className="py-2 pr-4">List</th>
-              <th className="py-2 pr-4">Pace</th>
-              <th className="py-2 pr-4">Status</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableHeaderCell>Name</TableHeaderCell>
+              <TableHeaderCell>List</TableHeaderCell>
+              <TableHeaderCell>Pace</TableHeaderCell>
+              <TableHeaderCell>Status</TableHeaderCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {campaigns.map((c) => (
-              <tr key={c.id} className="border-b border-line">
-                <td className="py-2.5 pr-4">
-                  <Link href={`/campaigns/${c.id}`} className="text-accent hover:underline">
+              <TableRow key={c.id} className="transition-standard hover:bg-surface">
+                <TableCell>
+                  <Link href={`/campaigns/${c.id}`} className="font-medium text-accent hover:underline">
                     {c.name}
                   </Link>
-                </td>
-                <td className="py-2.5 pr-4 text-muted">
+                </TableCell>
+                <TableCell className="text-muted">
                   {c.list.name} ({c.list.rowCount})
-                </td>
-                <td className="py-2.5 pr-4 font-mono text-muted">
+                </TableCell>
+                <TableCell className="font-mono text-xs text-muted">
                   {c.perDayCap}/day, {c.windowStart}–{c.windowEnd}
-                </td>
-                <td className={cn("py-2.5 pr-4 font-mono", STATUS_COLOR[c.status] ?? "text-muted")}>{c.status}</td>
-              </tr>
+                </TableCell>
+                <TableCell>
+                  <StatusBadge status={c.status} />
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
     </div>
   );

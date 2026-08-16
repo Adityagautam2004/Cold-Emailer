@@ -5,6 +5,11 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DispatchStrip } from "@/components/dispatch-strip";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { FieldError, Input, Label, Select } from "@/components/ui/input";
+import { NumberField } from "@/components/ui/number-field";
 
 interface ListRow {
   id: string;
@@ -40,17 +45,6 @@ const DAY_LABELS = [
   { iso: 7, label: "Sun" },
 ];
 
-const inputClass =
-  "w-full rounded-md border border-line bg-surface px-3 py-2 text-sm outline-none focus-visible:border-accent";
-
-/** Parses a free-typed numeric field, clamped to [min, max] — falls back when empty/non-numeric
- * (e.g. mid-edit) rather than snapping back on every keystroke like a clamped `useState<number>` would. */
-function toInt(raw: string, fallback: number, min: number, max = Infinity): number {
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.min(max, Math.max(min, Math.round(n)));
-}
-
 export function CampaignWizard({
   lists,
   resumes,
@@ -72,16 +66,10 @@ export function CampaignWizard({
   const [resumeId, setResumeId] = useState(resumes.find((r) => r.isActive)?.id ?? resumes[0]?.id ?? "");
   const [emailAccountId, setEmailAccountId] = useState(verifiedAccounts[0]?.id ?? "");
   const [stepTemplateIds, setStepTemplateIds] = useState<string[]>([templates[0]?.id ?? ""]);
-  // Raw text the user is typing, for steps 1..n parallel to stepTemplateIds.slice(1) — clamped
-  // to a real number only via toInt() below, not on every keystroke, so the field stays freely
-  // editable (can be cleared and retyped) instead of snapping back to the minimum while empty.
-  const [delayDaysInput, setDelayDaysInput] = useState<string[]>([]);
-  const delayDays = delayDaysInput.map((v) => toInt(v, 3, 3));
+  const [delayDays, setDelayDays] = useState<number[]>([]); // for steps 1..n, parallel to stepTemplateIds.slice(1)
 
-  const [perDayCapInput, setPerDayCapInput] = useState("20");
-  const perDayCap = toInt(perDayCapInput, 20, 1, 50);
-  const [minGapMinutesInput, setMinGapMinutesInput] = useState("6");
-  const minGapMinutes = toInt(minGapMinutesInput, 6, 1);
+  const [perDayCap, setPerDayCap] = useState(20);
+  const [minGapMinutes, setMinGapMinutes] = useState(6);
   const [windowStart, setWindowStart] = useState("10:00");
   const [windowEnd, setWindowEnd] = useState("18:00");
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1, 2, 3, 4, 5]);
@@ -96,11 +84,11 @@ export function CampaignWizard({
   function addFollowUp() {
     if (stepTemplateIds.length >= 3) return;
     setStepTemplateIds([...stepTemplateIds, templates[0]?.id ?? ""]);
-    setDelayDaysInput([...delayDaysInput, "3"]);
+    setDelayDays([...delayDays, 3]);
   }
   function removeFollowUp(index: number) {
     setStepTemplateIds(stepTemplateIds.filter((_, i) => i !== index));
-    setDelayDaysInput(delayDaysInput.filter((_, i) => i !== index - 1));
+    setDelayDays(delayDays.filter((_, i) => i !== index - 1));
   }
   function toggleDay(iso: number) {
     setDaysOfWeek((prev) => (prev.includes(iso) ? prev.filter((d) => d !== iso) : [...prev, iso].sort()));
@@ -181,240 +169,208 @@ export function CampaignWizard({
 
   if (lists.length === 0 || resumes.length === 0 || verifiedAccounts.length === 0 || templates.length === 0) {
     return (
-      <p className="text-sm text-muted">
-        You need at least one list, an active resume, a verified mailbox, and a template
-        before you can build a campaign.
-      </p>
+      <div>
+        <PageHeader title="New campaign" backHref="/campaigns" backLabel="Back to campaigns" />
+        <p className="text-sm text-muted">
+          You need at least one list, an active resume, a verified mailbox, and a template
+          before you can build a campaign.
+        </p>
+      </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-      <div className="space-y-6">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted">Campaign name</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="e.g. SDE outreach — batch 1" />
-        </div>
+    <div>
+      <PageHeader title="New campaign" backHref="/campaigns" backLabel="Back to campaigns" />
 
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted">List</label>
-          <select value={listId} onChange={(e) => setListId(e.target.value)} className={inputClass}>
-            {lists.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name} ({l.rowCount})
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <div className="space-y-6">
+          <div>
+            <Label htmlFor="name">Campaign name</Label>
+            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. SDE outreach — batch 1" />
+          </div>
 
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted">Resume</label>
-          <select value={resumeId} onChange={(e) => setResumeId(e.target.value)} className={inputClass}>
-            {resumes.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.filename} (v{r.version}
-                {r.isActive ? ", active" : ""})
-              </option>
-            ))}
-          </select>
-        </div>
+          <div>
+            <Label htmlFor="list">List</Label>
+            <Select id="list" value={listId} onChange={(e) => setListId(e.target.value)}>
+              {lists.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name} ({l.rowCount})
+                </option>
+              ))}
+            </Select>
+          </div>
 
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted">Send from</label>
-          <select value={emailAccountId} onChange={(e) => setEmailAccountId(e.target.value)} className={inputClass}>
-            {verifiedAccounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.fromEmail}
-              </option>
-            ))}
-          </select>
-          {stage && (
-            <p className="mt-1 text-xs text-muted">
-              Warmup stage {stage.stage} of 4 — {stage.cap}/day max right now.
-            </p>
-          )}
-        </div>
+          <div>
+            <Label htmlFor="resume">Resume</Label>
+            <Select id="resume" value={resumeId} onChange={(e) => setResumeId(e.target.value)}>
+              {resumes.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.filename} (v{r.version}
+                  {r.isActive ? ", active" : ""})
+                </option>
+              ))}
+            </Select>
+          </div>
 
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted">Initial template</label>
-          <select
-            value={stepTemplateIds[0]}
-            onChange={(e) => setStepTemplateIds([e.target.value, ...stepTemplateIds.slice(1)])}
-            className={inputClass}
-          >
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </div>
+          <div>
+            <Label htmlFor="account">Send from</Label>
+            <Select id="account" value={emailAccountId} onChange={(e) => setEmailAccountId(e.target.value)}>
+              {verifiedAccounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.fromEmail}
+                </option>
+              ))}
+            </Select>
+            {stage && (
+              <p className="mt-1.5 text-xs text-muted">
+                Warmup stage {stage.stage} of 4 — {stage.cap}/day max right now.
+              </p>
+            )}
+          </div>
 
-        {stepTemplateIds.slice(1).map((templateId, i) => (
-          <div key={i} className="rounded-md border border-line p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted">Follow-up {i + 1}</span>
-              <button type="button" onClick={() => removeFollowUp(i + 1)} className="text-xs text-muted hover:text-bad">
-                Remove
-              </button>
-            </div>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <select
-                value={templateId}
-                onChange={(e) => {
-                  const next = [...stepTemplateIds];
-                  next[i + 1] = e.target.value;
-                  setStepTemplateIds(next);
-                }}
-                className={inputClass}
-              >
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={delayDaysInput[i] ?? "3"}
+          <div>
+            <Label htmlFor="template">Initial template</Label>
+            <Select
+              id="template"
+              value={stepTemplateIds[0]}
+              onChange={(e) => setStepTemplateIds([e.target.value, ...stepTemplateIds.slice(1)])}
+            >
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          {stepTemplateIds.slice(1).map((templateId, i) => (
+            <Card key={i} className="p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted">Follow-up {i + 1}</span>
+                <button type="button" onClick={() => removeFollowUp(i + 1)} className="text-xs text-muted hover:text-bad">
+                  Remove
+                </button>
+              </div>
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Select
+                  value={templateId}
                   onChange={(e) => {
-                    if (!/^\d*$/.test(e.target.value)) return;
-                    const next = [...delayDaysInput];
-                    next[i] = e.target.value;
-                    setDelayDaysInput(next);
+                    const next = [...stepTemplateIds];
+                    next[i + 1] = e.target.value;
+                    setStepTemplateIds(next);
                   }}
-                  onBlur={() => {
-                    const next = [...delayDaysInput];
-                    next[i] = String(toInt(next[i] ?? "3", 3, 3));
-                    setDelayDaysInput(next);
-                  }}
-                  className={inputClass}
-                />
-                <span className="whitespace-nowrap text-xs text-muted">days after</span>
+                >
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </Select>
+                <div className="flex items-center gap-2">
+                  <NumberField
+                    min={3}
+                    value={delayDays[i] ?? 3}
+                    onChange={(next) => {
+                      const nextArr = [...delayDays];
+                      nextArr[i] = next;
+                      setDelayDays(nextArr);
+                    }}
+                  />
+                  <span className="whitespace-nowrap text-xs text-muted">days after</span>
+                </div>
               </div>
+            </Card>
+          ))}
+          {stepTemplateIds.length < 3 && (
+            <button type="button" onClick={addFollowUp} className="text-sm text-accent hover:underline">
+              + Add a follow-up
+            </button>
+          )}
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="perDayCap">Per day</Label>
+              <NumberField id="perDayCap" min={1} max={50} value={perDayCap} onChange={setPerDayCap} />
+            </div>
+            <div>
+              <Label htmlFor="minGap">Min gap (minutes)</Label>
+              <NumberField id="minGap" min={1} value={minGapMinutes} onChange={setMinGapMinutes} />
+            </div>
+            <div>
+              <Label htmlFor="windowStart">Window start</Label>
+              <Input id="windowStart" type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="windowEnd">Window end</Label>
+              <Input id="windowEnd" type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} />
             </div>
           </div>
-        ))}
-        {stepTemplateIds.length < 3 && (
-          <button type="button" onClick={addFollowUp} className="text-sm text-accent hover:underline">
-            + Add a follow-up
-          </button>
-        )}
 
-        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-muted">Per day</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={perDayCapInput}
-              onChange={(e) => {
-                if (/^\d*$/.test(e.target.value)) setPerDayCapInput(e.target.value);
-              }}
-              onBlur={() => setPerDayCapInput(String(toInt(perDayCapInput, 20, 1, 50)))}
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted">Min gap (minutes)</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={minGapMinutesInput}
-              onChange={(e) => {
-                if (/^\d*$/.test(e.target.value)) setMinGapMinutesInput(e.target.value);
-              }}
-              onBlur={() => setMinGapMinutesInput(String(toInt(minGapMinutesInput, 6, 1)))}
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted">Window start</label>
-            <input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} className={inputClass} />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted">Window end</label>
-            <input type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} className={inputClass} />
+            <Label>Days of week</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {DAY_LABELS.map((d) => (
+                <button
+                  key={d.iso}
+                  type="button"
+                  onClick={() => toggleDay(d.iso)}
+                  className={cn(
+                    "rounded-md border px-2.5 py-1.5 font-mono text-xs transition-standard",
+                    daysOfWeek.includes(d.iso) ? "border-accent bg-accent-soft text-accent" : "border-line text-muted hover:bg-surface"
+                  )}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-medium text-muted">Days of week</label>
-          <div className="flex gap-1.5">
-            {DAY_LABELS.map((d) => (
-              <button
-                key={d.iso}
-                type="button"
-                onClick={() => toggleDay(d.iso)}
-                className={cn(
-                  "rounded-md border px-2.5 py-1.5 font-mono text-xs transition-standard",
-                  daysOfWeek.includes(d.iso) ? "border-accent text-text" : "border-line text-muted"
-                )}
-              >
-                {d.label}
-              </button>
-            ))}
-          </div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Review — before you commit</p>
+          <Card className="p-5">
+            {!preview ? (
+              <p className="text-sm text-muted">Pick a list and a valid pace to see the schedule.</p>
+            ) : (
+              <>
+                <dl className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <dt className="text-xs text-muted">Total emails</dt>
+                    <dd className="font-mono">{preview.total}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">Days</dt>
+                    <dd className="font-mono">{preview.days}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">First send</dt>
+                    <dd className="font-mono">{new Date(preview.first).toLocaleString()}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">Last send</dt>
+                    <dd className="font-mono">{new Date(preview.last).toLocaleString()}</dd>
+                  </div>
+                </dl>
+
+                <div className="mt-4">
+                  <DispatchStrip
+                    ticks={preview.slots.map((s) => ({ date: s, status: "queued" as const }))}
+                    windowStart={windowStart}
+                    windowEnd={windowEnd}
+                    timezone={timezone}
+                  />
+                </div>
+              </>
+            )}
+          </Card>
+
+          <FieldError>{error}</FieldError>
+
+          <Button disabled={!preview} loading={creating} onClick={handleStart} className="mt-4">
+            Start campaign
+          </Button>
         </div>
-      </div>
-
-      <div>
-        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Review — before you commit</p>
-        <div className="rounded-lg border border-line bg-surface p-5">
-          {!preview ? (
-            <p className="text-sm text-muted">Pick a list and a valid pace to see the schedule.</p>
-          ) : (
-            <>
-              <dl className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <dt className="text-xs text-muted">Total emails</dt>
-                  <dd className="font-mono">{preview.total}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted">Days</dt>
-                  <dd className="font-mono">{preview.days}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted">First send</dt>
-                  <dd className="font-mono">{new Date(preview.first).toLocaleString()}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted">Last send</dt>
-                  <dd className="font-mono">{new Date(preview.last).toLocaleString()}</dd>
-                </div>
-              </dl>
-
-              <div className="mt-4">
-                <DispatchStrip
-                  ticks={preview.slots.map((s) => ({ date: s, status: "queued" as const }))}
-                  windowStart={windowStart}
-                  windowEnd={windowEnd}
-                  timezone={timezone}
-                />
-              </div>
-            </>
-          )}
-        </div>
-
-        {error && (
-          <p role="alert" className="mt-3 text-sm text-bad">
-            {error}
-          </p>
-        )}
-
-        <button
-          type="button"
-          disabled={creating || !preview}
-          onClick={handleStart}
-          className="mt-4 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text transition-standard hover:opacity-90 disabled:opacity-50"
-        >
-          {creating ? "Starting…" : "Start campaign"}
-        </button>
       </div>
     </div>
   );

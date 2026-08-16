@@ -3,6 +3,7 @@ import { prisma } from "@dispatch/db";
 import { NotFoundError } from "@/lib/api-errors";
 import { getOwnedList } from "@/lib/lists";
 import { requireUser } from "@/lib/require-user";
+import { PageHeader } from "@/components/ui/page-header";
 import { ContactTable } from "./contact-table";
 
 export default async function ListDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -25,14 +26,13 @@ export default async function ListDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <div>
-      <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold">{list.name}</h1>
-      <p className="mt-2 font-mono text-sm text-muted">
-        {list.sourceFilename} · {list.rowCount} contacts
-      </p>
-
-      <div className="mt-8">
-        <ContactTable contacts={contacts} />
-      </div>
+      <PageHeader
+        title={list.name}
+        description={`${list.sourceFilename} · ${list.rowCount} contacts`}
+        backHref="/lists"
+        backLabel="Back to lists"
+      />
+      <ContactTable contacts={contacts} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { prisma } from "@dispatch/db";
 import { requireUser } from "@/lib/require-user";
 import { SAFE_EMAIL_ACCOUNT_SELECT } from "@/lib/email-accounts";
+import { PageHeader } from "@/components/ui/page-header";
 import { EmailAccountManager } from "./email-account-manager";
 
 export default async function SettingsPage() {
@@ -14,10 +15,10 @@ export default async function SettingsPage() {
 
   return (
     <div className="max-w-2xl">
-      <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold">Settings</h1>
+      <PageHeader title="Settings" />
 
-      <section className="mt-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Connected mailbox</h2>
+      <section>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Connected mailbox</h2>
         <p className="mt-1 text-sm text-muted">
           Every campaign sends from this mailbox — never from a shared address.
         </p>

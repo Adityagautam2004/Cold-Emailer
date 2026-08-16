@@ -1,9 +1,17 @@
 "use client";
 
 import { MAX_RESUME_SIZE_BYTES } from "@dispatch/core";
+import { FileText, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { Dialog, DialogHeader } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FieldError } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/table";
 
 interface ResumeRow {
   id: string;
@@ -26,6 +34,7 @@ export function ResumeManager({ initialResumes }: { initialResumes: ResumeRow[] 
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirm();
 
   async function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -73,6 +82,7 @@ export function ResumeManager({ initialResumes }: { initialResumes: ResumeRow[] 
         throw new Error(body.error ?? "Could not save the upload.");
       }
 
+      toast.success(`"${file.name}" uploaded.`);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -81,20 +91,30 @@ export function ResumeManager({ initialResumes }: { initialResumes: ResumeRow[] 
     }
   }
 
-  async function handleActivate(id: string) {
+  async function handleActivate(id: string, filename: string) {
     setBusyId(id);
     try {
       await fetch(`/api/resumes/${id}/activate`, { method: "POST" });
+      toast.success(`"${filename}" is now the active resume.`);
       router.refresh();
     } finally {
       setBusyId(null);
     }
   }
 
-  async function handleArchive(id: string) {
+  async function handleArchive(id: string, filename: string) {
+    const ok = await confirm({
+      title: "Archive this resume?",
+      description: `"${filename}" will stop being selectable for new campaigns. Existing campaigns that already reference it keep working.`,
+      confirmLabel: "Archive",
+      destructive: true,
+    });
+    if (!ok) return;
+
     setBusyId(id);
     try {
       await fetch(`/api/resumes/${id}/archive`, { method: "POST" });
+      toast.success(`"${filename}" archived.`);
       router.refresh();
     } finally {
       setBusyId(null);
@@ -114,112 +134,94 @@ export function ResumeManager({ initialResumes }: { initialResumes: ResumeRow[] 
 
   return (
     <div>
+      {dialog}
       <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden" onChange={handleFileChosen} />
-      <button
-        type="button"
-        disabled={uploading}
-        onClick={() => fileInputRef.current?.click()}
-        className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text transition-standard hover:opacity-90 disabled:opacity-50"
-      >
+      <Button loading={uploading} onClick={() => fileInputRef.current?.click()}>
+        <Upload size={15} aria-hidden />
         {uploading ? "Uploading…" : "Upload a resume"}
-      </button>
-      {error && (
-        <p role="alert" className="mt-2 text-sm text-bad">
-          {error}
-        </p>
-      )}
+      </Button>
+      <FieldError>{error}</FieldError>
 
-      {initialResumes.length === 0 ? (
-        <p className="mt-8 text-sm text-muted">
-          No resumes yet. Upload a PDF, under 2 MB — this is what gets attached to every
-          campaign send.
-        </p>
-      ) : (
-        <table className="mt-8 w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
-              <th className="py-2 pr-4">File</th>
-              <th className="py-2 pr-4">Version</th>
-              <th className="py-2 pr-4">Size</th>
-              <th className="py-2 pr-4">Status</th>
-              <th className="py-2 pr-4">Uploaded</th>
-              <th className="py-2 pr-4" />
-            </tr>
-          </thead>
-          <tbody>
-            {initialResumes.map((r) => (
-              <tr key={r.id} className="border-b border-line">
-                <td className="py-2.5 pr-4">{r.filename}</td>
-                <td className="py-2.5 pr-4 font-mono">v{r.version}</td>
-                <td className="py-2.5 pr-4 font-mono">{formatSize(r.sizeBytes)}</td>
-                <td className="py-2.5 pr-4">
-                  {r.isArchived ? (
-                    <span className="text-muted">Archived</span>
-                  ) : r.isActive ? (
-                    <span className="text-good">Active</span>
-                  ) : (
-                    <span className="text-muted">Inactive</span>
-                  )}
-                </td>
-                <td className="py-2.5 pr-4 font-mono text-muted">
-                  {new Date(r.createdAt).toLocaleDateString()}
-                </td>
-                <td className="py-2.5 pr-4">
-                  <div className="flex justify-end gap-3">
-                    <button
-                      type="button"
-                      onClick={() => handlePreview(r.id)}
-                      disabled={busyId === r.id}
-                      className="text-accent hover:underline"
-                    >
-                      Preview
-                    </button>
-                    {!r.isActive && !r.isArchived && (
+      <div className="mt-6">
+        {initialResumes.length === 0 ? (
+          <EmptyState
+            icon={FileText}
+            title="No resumes yet"
+            description="Upload a PDF, under 2 MB — this is what gets attached to every campaign send."
+          />
+        ) : (
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableHeaderCell>File</TableHeaderCell>
+                <TableHeaderCell>Version</TableHeaderCell>
+                <TableHeaderCell>Size</TableHeaderCell>
+                <TableHeaderCell>Status</TableHeaderCell>
+                <TableHeaderCell>Uploaded</TableHeaderCell>
+                <TableHeaderCell />
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {initialResumes.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell>{r.filename}</TableCell>
+                  <TableCell className="font-mono">v{r.version}</TableCell>
+                  <TableCell className="font-mono text-muted">{formatSize(r.sizeBytes)}</TableCell>
+                  <TableCell>
+                    {r.isArchived ? (
+                      <Badge tone="neutral">Archived</Badge>
+                    ) : r.isActive ? (
+                      <Badge tone="good">Active</Badge>
+                    ) : (
+                      <Badge tone="neutral">Inactive</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="font-mono text-muted">{new Date(r.createdAt).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-4">
                       <button
                         type="button"
-                        onClick={() => handleActivate(r.id)}
+                        onClick={() => handlePreview(r.id)}
                         disabled={busyId === r.id}
-                        className="text-accent hover:underline"
+                        className="text-sm text-accent hover:underline disabled:opacity-50"
                       >
-                        Make active
+                        Preview
                       </button>
-                    )}
-                    {!r.isArchived && (
-                      <button
-                        type="button"
-                        onClick={() => handleArchive(r.id)}
-                        disabled={busyId === r.id}
-                        className="text-muted hover:underline"
-                      >
-                        Archive
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+                      {!r.isActive && !r.isArchived && (
+                        <button
+                          type="button"
+                          onClick={() => handleActivate(r.id, r.filename)}
+                          disabled={busyId === r.id}
+                          className="text-sm text-accent hover:underline disabled:opacity-50"
+                        >
+                          Make active
+                        </button>
+                      )}
+                      {!r.isArchived && (
+                        <button
+                          type="button"
+                          onClick={() => handleArchive(r.id, r.filename)}
+                          disabled={busyId === r.id}
+                          className="text-sm text-muted hover:text-bad disabled:opacity-50"
+                        >
+                          Archive
+                        </button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
 
-      {previewUrl && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-8"
-          onClick={() => setPreviewUrl(null)}
-        >
-          <div
-            className={cn("h-full w-full max-w-3xl rounded-lg border border-line bg-surface p-2")}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-2 flex justify-end">
-              <button type="button" onClick={() => setPreviewUrl(null)} className="text-sm text-muted hover:text-text">
-                Close
-              </button>
-            </div>
-            <iframe src={previewUrl} title="Resume preview" className="h-[calc(100%-2rem)] w-full rounded" />
-          </div>
+      <Dialog open={!!previewUrl} onOpenChange={(open) => !open && setPreviewUrl(null)} className="h-[85dvh] w-[calc(100vw-2rem)] max-w-3xl">
+        <div className="flex h-full flex-col">
+          <DialogHeader title="Resume preview" onClose={() => setPreviewUrl(null)} />
+          {previewUrl && <iframe src={previewUrl} title="Resume preview" className="flex-1 rounded-b-xl" />}
         </div>
-      )}
+      </Dialog>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import { prisma } from "@dispatch/db";
 import { requireUser } from "@/lib/require-user";
 import { ensureSeedTemplates } from "@/lib/templates";
+import { PageHeader } from "@/components/ui/page-header";
+import { LinkButton } from "@/components/ui/button";
 import { TemplateList } from "./template-list";
 
 export default async function TemplatesPage() {
@@ -14,19 +16,12 @@ export default async function TemplatesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold">Templates</h1>
-          <p className="mt-2 text-sm text-muted">
-            Every campaign needs at least one recipient-side variable — a template with none
-            can be saved, but can&apos;t start a campaign.
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <TemplateList templates={templates} />
-      </div>
+      <PageHeader
+        title="Templates"
+        description="Every campaign needs at least one recipient-side variable — a template with none can be saved, but can't start a campaign."
+        actions={<LinkButton href="/templates/new">New template</LinkButton>}
+      />
+      <TemplateList templates={templates} />
     </div>
   );
 }

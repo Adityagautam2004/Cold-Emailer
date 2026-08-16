@@ -1,8 +1,13 @@
 "use client";
 
 import { bucketRows, formatImportSummary, rejectedRowsToCsv, type ImportReport } from "@dispatch/core";
+import { Upload } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { FieldError, Input, Label } from "@/components/ui/input";
 
 interface ParsedSheet {
   headers: string[];
@@ -11,8 +16,12 @@ interface ParsedSheet {
 
 type FixedTarget = "email" | "hr_name" | "company" | "title" | "ignore" | "custom";
 
-const inputClass =
-  "w-full rounded-md border border-line bg-surface px-3 py-2 text-sm outline-none focus-visible:border-accent";
+const STEPS = [
+  { key: "upload", label: "Upload" },
+  { key: "map", label: "Map columns" },
+  { key: "report", label: "Review" },
+  { key: "done", label: "Done" },
+] as const;
 
 function downloadCsv(filename: string, csv: string) {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -22,6 +31,33 @@ function downloadCsv(filename: string, csv: string) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function StepIndicator({ active }: { active: (typeof STEPS)[number]["key"] }) {
+  const activeIndex = STEPS.findIndex((s) => s.key === active);
+  return (
+    <ol className="mb-8 flex flex-wrap gap-2">
+      {STEPS.map((s, i) => (
+        <li
+          key={s.key}
+          className={cn(
+            "flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm",
+            i === activeIndex ? "border-accent text-text" : i < activeIndex ? "border-line text-muted" : "border-line text-muted opacity-50"
+          )}
+        >
+          <span
+            className={cn(
+              "flex h-5 w-5 items-center justify-center rounded-full font-mono text-[10px]",
+              i <= activeIndex ? "bg-accent-soft text-accent" : "bg-line text-muted"
+            )}
+          >
+            {i < activeIndex ? "✓" : i + 1}
+          </span>
+          {s.label}
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 export function ImportWizard() {
@@ -105,179 +141,155 @@ export function ImportWizard() {
     }
   }
 
-  if (step === "upload") {
-    return (
-      <div>
-        <input ref={fileInputRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={handleUpload} />
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => fileInputRef.current?.click()}
-          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text transition-standard hover:opacity-90 disabled:opacity-50"
-        >
-          {pending ? "Reading…" : "Choose a file"}
-        </button>
-        {error && (
-          <p role="alert" className="mt-3 text-sm text-bad">
-            {error}
-          </p>
-        )}
-      </div>
-    );
-  }
+  return (
+    <div>
+      <StepIndicator active={step} />
 
-  if (step === "map" && sheet) {
-    return (
-      <div>
-        <h2 className="font-medium">Map your columns</h2>
-        <p className="mt-1 text-sm text-muted">Email is the only required mapping.</p>
+      {step === "upload" && (
+        <Card className="flex flex-col items-center justify-center border-dashed p-14 text-center">
+          <input ref={fileInputRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={handleUpload} />
+          <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-surface-2 text-muted">
+            <Upload size={20} aria-hidden />
+          </div>
+          <p className="text-sm font-medium">Choose a spreadsheet to import</p>
+          <p className="mt-1 text-sm text-muted">.xlsx or .csv, up to 5 MB and 2,000 rows</p>
+          <Button
+            type="button"
+            loading={pending}
+            onClick={() => fileInputRef.current?.click()}
+            className="mt-5"
+          >
+            {pending ? "Reading…" : "Choose a file"}
+          </Button>
+          <FieldError>{error}</FieldError>
+        </Card>
+      )}
 
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full border-collapse text-xs">
-            <thead>
-              <tr>
-                {sheet.headers.map((h, i) => (
-                  <th key={i} className="border-b border-line p-2 text-left align-top">
-                    <div className="mb-1 font-mono text-muted">{h || `(column ${i + 1})`}</div>
-                    <select
-                      value={selects[i]}
-                      onChange={(e) => {
-                        const next = [...selects];
-                        next[i] = e.target.value as FixedTarget;
-                        setSelects(next);
-                      }}
-                      className="w-full rounded border border-line bg-surface px-1.5 py-1 text-xs"
-                    >
-                      <option value="email">email</option>
-                      <option value="hr_name">hr_name</option>
-                      <option value="company">company</option>
-                      <option value="title">title</option>
-                      <option value="custom">custom field…</option>
-                      <option value="ignore">ignore</option>
-                    </select>
-                    {selects[i] === "custom" && (
-                      <input
-                        type="text"
-                        placeholder="field name"
-                        value={customNames[i] ?? ""}
-                        onChange={(e) => setCustomNames({ ...customNames, [i]: e.target.value })}
-                        className="mt-1 w-full rounded border border-line bg-surface px-1.5 py-1 text-xs"
-                      />
-                    )}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sheet.rows.slice(0, 5).map((row) => (
-                <tr key={row.rowNumber}>
-                  {row.values.map((v, i) => (
-                    <td key={i} className="border-b border-line p-2 text-muted">
-                      {v}
-                    </td>
+      {step === "map" && sheet && (
+        <div>
+          <h2 className="font-medium">Map your columns</h2>
+          <p className="mt-1 text-sm text-muted">Email is the only required mapping.</p>
+
+          <div className="mt-4 overflow-x-auto rounded-lg border border-line">
+            <table className="w-full min-w-max border-collapse text-xs">
+              <thead>
+                <tr>
+                  {sheet.headers.map((h, i) => (
+                    <th key={i} className="border-b border-line bg-surface p-2 text-left align-top">
+                      <div className="mb-1 font-mono text-muted">{h || `(column ${i + 1})`}</div>
+                      <select
+                        value={selects[i]}
+                        onChange={(e) => {
+                          const next = [...selects];
+                          next[i] = e.target.value as FixedTarget;
+                          setSelects(next);
+                        }}
+                        className="w-full rounded border border-line bg-ink px-1.5 py-1 text-xs outline-none focus-visible:border-accent"
+                      >
+                        <option value="email">email</option>
+                        <option value="hr_name">hr_name</option>
+                        <option value="company">company</option>
+                        <option value="title">title</option>
+                        <option value="custom">custom field…</option>
+                        <option value="ignore">ignore</option>
+                      </select>
+                      {selects[i] === "custom" && (
+                        <input
+                          type="text"
+                          placeholder="field name"
+                          value={customNames[i] ?? ""}
+                          onChange={(e) => setCustomNames({ ...customNames, [i]: e.target.value })}
+                          className="mt-1 w-full rounded border border-line bg-ink px-1.5 py-1 text-xs outline-none focus-visible:border-accent"
+                        />
+                      )}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {sheet.rows.slice(0, 5).map((row) => (
+                  <tr key={row.rowNumber}>
+                    {row.values.map((v, i) => (
+                      <td key={i} className="border-b border-line p-2 text-muted last:border-b-0">
+                        {v}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-        <label className="mt-4 flex items-center gap-2 text-sm text-muted">
-          <input
-            type="checkbox"
-            checked={includeRoleAddresses}
-            onChange={(e) => setIncludeRoleAddresses(e.target.checked)}
-          />
-          Include role addresses (info@, careers@, hr@, support@, admin@, noreply@) — these get few replies
-        </label>
-
-        {!mapping.includes("email") && <p className="mt-3 text-sm text-bad">Map a column to &quot;email&quot; to continue.</p>}
-
-        <button
-          type="button"
-          disabled={!mapping.includes("email")}
-          onClick={() => setStep("report")}
-          className="mt-4 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text transition-standard hover:opacity-90 disabled:opacity-50"
-        >
-          Continue
-        </button>
-      </div>
-    );
-  }
-
-  if (step === "report" && report) {
-    const rejectedCount = report.duplicates.length + report.invalid.length + report.roleSkipped.length;
-    return (
-      <div>
-        <h2 className="font-medium">Review before importing</h2>
-        <p className="mt-3 font-mono text-sm">{formatImportSummary(report)}</p>
-
-        {rejectedCount > 0 && (
-          <button
-            type="button"
-            onClick={() => downloadCsv("rejected-rows.csv", rejectedRowsToCsv(report))}
-            className="mt-3 text-sm text-accent hover:underline"
-          >
-            Download rejected rows ({rejectedCount}) as CSV
-          </button>
-        )}
-
-        <div className="mt-4">
-          <label htmlFor="listName" className="mb-1 block text-xs font-medium text-muted">
-            List name
+          <label className="mt-4 flex items-center gap-2 text-sm text-muted">
+            <input
+              type="checkbox"
+              checked={includeRoleAddresses}
+              onChange={(e) => setIncludeRoleAddresses(e.target.checked)}
+            />
+            Include role addresses (info@, careers@, hr@, support@, admin@, noreply@) — these get few replies
           </label>
-          <input id="listName" value={listName} onChange={(e) => setListName(e.target.value)} className={inputClass} />
+
+          {!mapping.includes("email") && <p className="mt-3 text-sm text-bad">Map a column to &quot;email&quot; to continue.</p>}
+
+          <Button disabled={!mapping.includes("email")} onClick={() => setStep("report")} className="mt-4">
+            Continue
+          </Button>
         </div>
+      )}
 
-        {error && (
-          <p role="alert" className="mt-3 text-sm text-bad">
-            {error}
-          </p>
-        )}
+      {step === "report" && report && (
+        <div>
+          <h2 className="font-medium">Review before importing</h2>
+          <p className="mt-3 font-mono text-sm">{formatImportSummary(report)}</p>
 
-        <div className="mt-4 flex gap-3">
-          <button
-            type="button"
-            onClick={() => setStep("map")}
-            className="rounded-md border border-line px-4 py-2 text-sm font-medium text-text transition-standard hover:bg-surface"
-          >
-            Back
-          </button>
-          <button
-            type="button"
-            disabled={pending || report.candidates.length === 0 || !listName.trim()}
-            onClick={handleCommit}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text transition-standard hover:opacity-90 disabled:opacity-50"
-          >
-            {pending ? "Importing…" : `Import ${report.candidates.length} contacts`}
-          </button>
+          {report.duplicates.length + report.invalid.length + report.roleSkipped.length > 0 && (
+            <button
+              type="button"
+              onClick={() => downloadCsv("rejected-rows.csv", rejectedRowsToCsv(report))}
+              className="mt-3 text-sm text-accent hover:underline"
+            >
+              Download rejected rows ({report.duplicates.length + report.invalid.length + report.roleSkipped.length}) as CSV
+            </button>
+          )}
+
+          <div className="mt-4 max-w-sm">
+            <Label htmlFor="listName">List name</Label>
+            <Input id="listName" value={listName} onChange={(e) => setListName(e.target.value)} />
+          </div>
+
+          <FieldError>{error}</FieldError>
+
+          <div className="mt-4 flex gap-3">
+            <Button variant="secondary" onClick={() => setStep("map")}>
+              Back
+            </Button>
+            <Button
+              disabled={report.candidates.length === 0 || !listName.trim()}
+              loading={pending}
+              onClick={handleCommit}
+            >
+              {pending ? "Importing…" : `Import ${report.candidates.length} contacts`}
+            </Button>
+          </div>
         </div>
-      </div>
-    );
-  }
+      )}
 
-  if (step === "done" && commitResult) {
-    return (
-      <div>
-        <div className="rounded-md border border-good/40 bg-good/10 px-4 py-3 text-sm text-good">
-          Imported {commitResult.report.imported} contacts into &quot;{commitResult.list.name}&quot;.
+      {step === "done" && commitResult && (
+        <div>
+          <div className="rounded-md border border-good/40 bg-good-soft px-4 py-3 text-sm text-good">
+            Imported {commitResult.report.imported} contacts into &quot;{commitResult.list.name}&quot;.
+          </div>
+          {(commitResult.report.excludedSuppressed > 0 || commitResult.report.excludedAlreadyContacted > 0) && (
+            <p className="mt-3 text-sm text-muted">
+              Also excluded: {commitResult.report.excludedSuppressed} on your suppression list,{" "}
+              {commitResult.report.excludedAlreadyContacted} already contacted in a previous list.
+            </p>
+          )}
+          <Button onClick={() => router.push(`/lists/${commitResult.list.id}`)} className="mt-4">
+            View list
+          </Button>
         </div>
-        {(commitResult.report.excludedSuppressed > 0 || commitResult.report.excludedAlreadyContacted > 0) && (
-          <p className="mt-3 text-sm text-muted">
-            Also excluded: {commitResult.report.excludedSuppressed} on your suppression list,{" "}
-            {commitResult.report.excludedAlreadyContacted} already contacted in a previous list.
-          </p>
-        )}
-        <button
-          type="button"
-          onClick={() => router.push(`/lists/${commitResult.list.id}`)}
-          className="mt-4 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text transition-standard hover:opacity-90"
-        >
-          View list
-        </button>
-      </div>
-    );
-  }
-
-  return null;
+      )}
+    </div>
+  );
 }

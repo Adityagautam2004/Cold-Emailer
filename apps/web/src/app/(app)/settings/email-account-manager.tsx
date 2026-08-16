@@ -3,6 +3,11 @@
 import { warmupStage } from "@dispatch/core";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
+import { StatusBadge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { FieldError, Input, Label } from "@/components/ui/input";
 
 interface EmailAccountRow {
   id: string;
@@ -19,14 +24,11 @@ interface EmailAccountRow {
   createdAt: string | Date;
 }
 
-const inputClass =
-  "w-full rounded-md border border-line bg-ink px-3 py-2 text-sm outline-none focus-visible:border-accent";
-
-function StatusBadge({ status, verified }: { status: string; verified: boolean }) {
-  if (status === "error") return <span className="font-mono text-xs text-bad">error</span>;
-  if (status === "paused") return <span className="font-mono text-xs text-pending">paused</span>;
-  if (!verified) return <span className="font-mono text-xs text-pending">unverified</span>;
-  return <span className="font-mono text-xs text-good">active</span>;
+function accountStatusLabel(acc: Pick<EmailAccountRow, "status" | "verifiedAt">): string {
+  if (acc.status === "error") return "error";
+  if (acc.status === "paused") return "paused";
+  if (!acc.verifiedAt) return "unverified";
+  return "active";
 }
 
 export function EmailAccountManager({
@@ -47,7 +49,6 @@ export function EmailAccountManager({
   const [appPassword, setAppPassword] = useState("");
   const [reconnectingId, setReconnectingId] = useState<string | null>(null);
   const [reconnectPassword, setReconnectPassword] = useState("");
-  const [testEmailSentId, setTestEmailSentId] = useState<string | null>(null);
 
   async function postJson(url: string, body: unknown) {
     const res = await fetch(url, {
@@ -69,6 +70,7 @@ export function EmailAccountManager({
       setFromEmail("");
       setFromName("");
       setAppPassword("");
+      toast.success("Mailbox connected.");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -82,7 +84,7 @@ export function EmailAccountManager({
     setPending(true);
     try {
       await postJson(`/api/email-accounts/${id}/test-email`, {});
-      setTestEmailSentId(id);
+      toast.success("Test email sent — check your inbox.");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -98,6 +100,7 @@ export function EmailAccountManager({
       await postJson(`/api/email-accounts/${id}/reconnect`, { appPassword: reconnectPassword });
       setReconnectingId(null);
       setReconnectPassword("");
+      toast.success("Mailbox reconnected.");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -108,26 +111,22 @@ export function EmailAccountManager({
 
   return (
     <div>
-      {error && (
-        <p role="alert" className="mb-4 text-sm text-bad">
-          {error}
-        </p>
-      )}
+      <FieldError>{error}</FieldError>
 
       {initialAccounts.map((acc) => {
         const stage = warmupStage(new Date(acc.warmupStartedAt));
         return (
-          <div key={acc.id} className="mb-4 rounded-lg border border-line bg-surface p-5">
+          <Card key={acc.id} className="mb-4 p-5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-mono text-sm">{acc.fromEmail}</p>
                 <p className="text-xs text-muted">{acc.fromName}</p>
               </div>
-              <StatusBadge status={acc.status} verified={!!acc.verifiedAt} />
+              <StatusBadge status={accountStatusLabel(acc)} />
             </div>
 
             {acc.status === "error" && (
-              <div className="mt-3 rounded-md border border-bad/40 bg-bad/10 px-3 py-2 text-sm text-bad">
+              <div className="mt-3 rounded-md border border-bad/40 bg-bad-soft px-3 py-2 text-sm text-bad">
                 {acc.statusReason ?? "Gmail rejected the app password. Generate a new one and reconnect."}
               </div>
             )}
@@ -168,7 +167,6 @@ export function EmailAccountManager({
                   Send test email to myself
                 </button>
               )}
-              {testEmailSentId === acc.id && <span className="text-good">Sent — check your inbox.</span>}
               <button
                 type="button"
                 onClick={() => setReconnectingId(reconnectingId === acc.id ? null : acc.id)}
@@ -186,96 +184,60 @@ export function EmailAccountManager({
                 }}
                 className="mt-3 flex gap-2"
               >
-                <input
+                <Input
                   type="password"
                   required
                   value={reconnectPassword}
                   onChange={(e) => setReconnectPassword(e.target.value)}
                   placeholder="New app password"
-                  className={inputClass}
                 />
-                <button
-                  type="submit"
-                  disabled={pending}
-                  className="shrink-0 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text disabled:opacity-50"
-                >
+                <Button type="submit" loading={pending} className="shrink-0">
                   Save
-                </button>
+                </Button>
               </form>
             )}
-          </div>
+          </Card>
         );
       })}
 
       {!hideConnectForm && (
-      <div className="rounded-lg border border-line bg-surface p-5">
-        <h3 className="font-medium">Connect a Gmail account</h3>
-        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted">
-          <li>
-            Your Google account needs 2-Step Verification on —{" "}
-            <a className="text-accent underline" href="https://myaccount.google.com/security" target="_blank" rel="noreferrer">
-              check here
-            </a>
-            .
-          </li>
-          <li>
-            Go to{" "}
-            <a className="text-accent underline" href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer">
-              myaccount.google.com/apppasswords
-            </a>
-            , name it &quot;Dispatch&quot;, create it, and copy the 16-character code.
-          </li>
-          <li>Paste it below — spaces don&apos;t matter, and it&apos;s stored encrypted, never shown again.</li>
-        </ol>
-        <form onSubmit={handleConnect} className="mt-4 space-y-3">
-          <div>
-            <label htmlFor="fromEmail" className="mb-1 block text-xs font-medium text-muted">
-              Gmail address
-            </label>
-            <input
-              id="fromEmail"
-              type="email"
-              required
-              value={fromEmail}
-              onChange={(e) => setFromEmail(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="fromName" className="mb-1 block text-xs font-medium text-muted">
-              Your name (shown as the sender)
-            </label>
-            <input
-              id="fromName"
-              type="text"
-              required
-              value={fromName}
-              onChange={(e) => setFromName(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="appPassword" className="mb-1 block text-xs font-medium text-muted">
-              App password
-            </label>
-            <input
-              id="appPassword"
-              type="password"
-              required
-              value={appPassword}
-              onChange={(e) => setAppPassword(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-text transition-standard hover:opacity-90 disabled:opacity-50"
-          >
-            {pending ? "Connecting…" : "Connect"}
-          </button>
-        </form>
-      </div>
+        <Card className="p-5">
+          <h3 className="font-medium">Connect a Gmail account</h3>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted">
+            <li>
+              Your Google account needs 2-Step Verification on —{" "}
+              <a className="text-accent underline" href="https://myaccount.google.com/security" target="_blank" rel="noreferrer">
+                check here
+              </a>
+              .
+            </li>
+            <li>
+              Go to{" "}
+              <a className="text-accent underline" href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer">
+                myaccount.google.com/apppasswords
+              </a>
+              , name it &quot;Dispatch&quot;, create it, and copy the 16-character code.
+            </li>
+            <li>Paste it below — spaces don&apos;t matter, and it&apos;s stored encrypted, never shown again.</li>
+          </ol>
+          <form onSubmit={handleConnect} className="mt-4 space-y-3">
+            <div>
+              <Label htmlFor="fromEmail">Gmail address</Label>
+              <Input id="fromEmail" type="email" required value={fromEmail} onChange={(e) => setFromEmail(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="fromName">Your name (shown as the sender)</Label>
+              <Input id="fromName" type="text" required value={fromName} onChange={(e) => setFromName(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="appPassword">App password</Label>
+              <Input id="appPassword" type="password" required value={appPassword} onChange={(e) => setAppPassword(e.target.value)} />
+            </div>
+            <Button type="submit" loading={pending}>
+              Connect
+            </Button>
+          </form>
+        </Card>
       )}
     </div>
   );

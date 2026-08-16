@@ -3,6 +3,10 @@
 import { renderTemplate, validateTemplate } from "@dispatch/core";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { FieldError, Input, Label, Textarea } from "@/components/ui/input";
 
 const VARIABLES = [
   { token: "{{hr_name}}", label: "HR name" },
@@ -32,7 +36,6 @@ export function TemplateEditor({ initial }: { initial: TemplateData }) {
   const [bodyText, setBodyText] = useState(initial.bodyText);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
 
   const warnings = useMemo(() => validateTemplate(subject, bodyText), [subject, bodyText]);
   const preview = useMemo(() => {
@@ -80,7 +83,7 @@ export function TemplateEditor({ initial }: { initial: TemplateData }) {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? "Could not save.");
-      setSaved(true);
+      toast.success("Template saved.");
       if (!initial.id) {
         router.push(`/templates/${body.template.id}`);
       } else {
@@ -98,33 +101,15 @@ export function TemplateEditor({ initial }: { initial: TemplateData }) {
       <div>
         <div className="space-y-3">
           <div>
-            <label htmlFor="name" className="mb-1 block text-xs font-medium text-muted">
-              Template name
-            </label>
-            <input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm outline-none focus-visible:border-accent"
-            />
+            <Label htmlFor="name">Template name</Label>
+            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div>
-            <label htmlFor="subject" className="mb-1 block text-xs font-medium text-muted">
-              Subject
-            </label>
-            <input
-              id="subject"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm outline-none focus-visible:border-accent"
-            />
+            <Label htmlFor="subject">Subject</Label>
+            <Input id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
           </div>
           <div>
-            <div className="mb-1 flex items-center justify-between">
-              <label htmlFor="body" className="block text-xs font-medium text-muted">
-                Body
-              </label>
-            </div>
+            <Label htmlFor="body">Body</Label>
             <div className="mb-2 flex flex-wrap gap-1.5">
               {VARIABLES.map((v) => (
                 <button
@@ -137,14 +122,7 @@ export function TemplateEditor({ initial }: { initial: TemplateData }) {
                 </button>
               ))}
             </div>
-            <textarea
-              id="body"
-              ref={bodyRef}
-              rows={14}
-              value={bodyText}
-              onChange={(e) => setBodyText(e.target.value)}
-              className="w-full rounded-md border border-line bg-surface px-3 py-2 font-mono text-sm outline-none focus-visible:border-accent"
-            />
+            <Textarea id="body" ref={bodyRef} rows={14} value={bodyText} onChange={(e) => setBodyText(e.target.value)} className="font-mono" />
           </div>
         </div>
 
@@ -158,28 +136,18 @@ export function TemplateEditor({ initial }: { initial: TemplateData }) {
           </ul>
         )}
 
-        {error && (
-          <p role="alert" className="mt-3 text-sm text-bad">
-            {error}
-          </p>
-        )}
+        <FieldError>{error}</FieldError>
 
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="mt-4 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text transition-standard hover:opacity-90 disabled:opacity-50"
-        >
-          {saving ? "Saving…" : "Save template"}
-        </button>
-        {saved && <span className="ml-3 text-sm text-good">Saved.</span>}
+        <Button onClick={handleSave} loading={saving} className="mt-4">
+          Save template
+        </Button>
       </div>
 
       <div>
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
           Preview — against a dummy contact until you have a real list
         </p>
-        <div className="rounded-lg border border-line bg-surface p-5">
+        <Card className="p-5">
           {"error" in preview ? (
             <p className="text-sm text-bad">{preview.error}</p>
           ) : (
@@ -188,7 +156,7 @@ export function TemplateEditor({ initial }: { initial: TemplateData }) {
               <pre className="mt-3 whitespace-pre-wrap font-sans text-sm text-text">{preview.body}</pre>
             </>
           )}
-        </div>
+        </Card>
       </div>
     </div>
   );

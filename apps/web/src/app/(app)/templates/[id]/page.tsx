@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/require-user";
 import { getOwnedTemplate } from "@/lib/templates";
 import { NotFoundError } from "@/lib/api-errors";
+import { PageHeader } from "@/components/ui/page-header";
 import { TemplateEditor } from "../template-editor";
 
 export default async function EditTemplatePage({ params }: { params: Promise<{ id: string }> }) {
@@ -18,12 +19,10 @@ export default async function EditTemplatePage({ params }: { params: Promise<{ i
 
   return (
     <div>
-      <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold">{template.name}</h1>
-      <div className="mt-8">
-        <TemplateEditor
-          initial={{ id: template.id, name: template.name, subject: template.subject, bodyText: template.bodyText }}
-        />
-      </div>
+      <PageHeader title={template.name} backHref="/templates" backLabel="Back to templates" />
+      <TemplateEditor
+        initial={{ id: template.id, name: template.name, subject: template.subject, bodyText: template.bodyText }}
+      />
     </div>
   );
 }

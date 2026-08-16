@@ -1,13 +1,19 @@
+import Link from "next/link";
+
 export default function TermsPage() {
   return (
     <main className="min-h-screen bg-ink px-6 py-16 text-text">
       <div className="mx-auto max-w-2xl">
-        <div className="mb-8 rounded-md border border-pending/40 bg-surface px-4 py-3 text-sm text-pending">
+        <Link href="/" className="text-sm text-muted transition-standard hover:text-text">
+          ← Dispatch
+        </Link>
+
+        <div className="mb-8 mt-6 rounded-md border border-pending/40 bg-surface px-4 py-3 text-sm text-pending">
           This is a template. It has not been reviewed by a lawyer. Read it, edit it, and
           have it reviewed before you rely on it with real users.
         </div>
 
-        <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold">Terms of service</h1>
+        <h1 className="font-display text-3xl font-bold">Terms of service</h1>
         <p className="mt-2 text-sm text-muted">Last updated: see your deployment date.</p>
 
         <div className="mt-8 space-y-6 text-sm leading-relaxed text-text">

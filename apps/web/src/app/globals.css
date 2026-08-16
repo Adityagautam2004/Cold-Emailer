@@ -3,25 +3,42 @@
 :root {
   --ink: #14161a; /* app background, warm-neutral graphite, not pure black */
   --surface: #1c1f24; /* cards, table rows */
+  --surface-2: #22262c; /* one step up — hovered rows, nested cards, popovers */
+  --surface-hover: #262a31; /* hover/active state for interactive surfaces */
   --line: #2a2f36; /* hairlines, 1px, used generously */
+  --line-strong: #383e47; /* dividers that need to read a bit harder than a hairline */
   --text: #e8e6e1; /* primary text, slightly warm off-white */
   --muted: #8b9199; /* secondary text, labels */
   --accent: #4f5bd5; /* indigo — interactive only: links, focus, primary buttons */
+  --accent-hover: #6069df; /* accent, one step brighter for hover */
+  --accent-soft: rgba(79, 91, 213, 0.14); /* accent tint for selected/active backgrounds */
   --pending: #c9922e; /* amber — queued / in flight */
+  --pending-soft: rgba(201, 146, 46, 0.14);
   --good: #3e9b6b; /* green — replied. the colour the user wants to see */
+  --good-soft: rgba(62, 155, 107, 0.14);
   --bad: #c4553f; /* clay red — bounced / failed */
+  --bad-soft: rgba(196, 85, 63, 0.14);
+  --shadow-color: 220 40% 2%;
 }
 
 @theme inline {
   --color-ink: var(--ink);
   --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-hover: var(--surface-hover);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-text: var(--text);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
   --color-pending: var(--pending);
+  --color-pending-soft: var(--pending-soft);
   --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
   --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
 
   --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
   --font-body: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
@@ -57,6 +74,10 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+@utility font-display {
+  font-family: var(--font-display);
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .transition-standard {
     transition-duration: 140ms;
@@ -76,6 +97,61 @@ body {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Native <dialog> — used by components/ui/dialog.tsx. The element gets free focus-trapping,
+   Escape-to-close, and top-layer stacking from the browser; we only need to style it. */
+dialog {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 20px 60px -12px hsl(var(--shadow-color) / 0.6);
+  padding: 0;
+}
+
+dialog::backdrop {
+  background: hsl(var(--shadow-color) / 0.6);
+  backdrop-filter: blur(2px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  dialog {
+    transition:
+      display 160ms allow-discrete,
+      overlay 160ms allow-discrete,
+      opacity 160ms,
+      transform 160ms;
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  dialog[open] {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  @starting-style {
+    dialog[open] {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
 }
 
 @media (prefers-reduced-motion: reduce) {
