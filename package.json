@@ -30,7 +30,7 @@
     "dotenv-cli": "^7.4.4"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "overrides": {
     "@types/node": "^20.14.15"
