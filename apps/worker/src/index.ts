@@ -4,8 +4,6 @@ import { createRedisConnection } from "./redis.js";
 import { QUEUE_NAMES } from "./queues.js";
 import { registerTickJob } from "./jobs/tick.js";
 import { registerSendWorker } from "./jobs/send.js";
-import { registerResetQuotaJob } from "./jobs/reset-quota.js";
-import { registerPollInboxJob } from "./jobs/poll-inbox.js";
 
 async function main() {
   logger.info({ dryRun: env.SEND_DRY_RUN }, "worker starting");
@@ -15,15 +13,17 @@ async function main() {
 
   const sendQueue = new Queue(QUEUE_NAMES.send, { connection });
   const sendWorker = registerSendWorker(connection);
+  // Quota reset and inbox polling ride along inside the tick worker's own 60s loop instead of
+  // running as their own BullMQ queues — see tick.ts for why (each extra queue with a
+  // repeatable scheduler carries a fixed, un-tunable Redis-polling cost on serverless/
+  // pay-per-command Redis like Upstash).
   const { worker: tickWorker } = await registerTickJob(connection, sendQueue);
-  const { worker: resetQuotaWorker } = await registerResetQuotaJob(connection);
-  const { worker: pollInboxWorker } = await registerPollInboxJob(connection);
 
-  logger.info("worker ready — tick every 60s, quota reset every 15m, inbox poll every 15m per account");
+  logger.info("worker ready — tick every 60s (also checks quota resets and due inbox polls)");
 
   const shutdown = async () => {
     logger.info("worker shutting down");
-    await Promise.all([tickWorker.close(), sendWorker.close(), resetQuotaWorker.close(), pollInboxWorker.close()]);
+    await Promise.all([tickWorker.close(), sendWorker.close()]);
     await sendQueue.close();
     connection.disconnect();
     process.exit(0);

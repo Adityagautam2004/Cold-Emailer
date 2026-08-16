@@ -10,13 +10,9 @@ import { logger } from "@dispatch/config";
 import { prisma, suppressEmailCascade } from "@dispatch/db";
 import { AuthenticationFailure, ImapFlow } from "imapflow";
 import { simpleParser, type Headers as ParsedHeaders } from "mailparser";
-import { Queue, Worker, type ConnectionOptions } from "bullmq";
 import { checkCircuitBreaker } from "../circuit-breaker.js";
 import { pauseAccountOnError } from "../account-errors.js";
 
-const SCHEDULER_JOB_ID = "poll-inbox-scheduler";
-const SCHEDULER_QUEUE_NAME = "poll-inbox";
-const SCHEDULER_INTERVAL_MS = 60_000; // how often we check which accounts are due
 const POLL_INTERVAL_MS = 15 * 60_000; // §13 — each account polled at most this often
 const REPLY_LOOKBACK_DAYS = 30;
 
@@ -205,28 +201,4 @@ export async function pollDueInboxes(): Promise<number> {
     }
   }
   return due.length;
-}
-
-export async function registerPollInboxJob(connection: ConnectionOptions): Promise<{ queue: Queue; worker: Worker }> {
-  const queue = new Queue(SCHEDULER_QUEUE_NAME, { connection });
-
-  await queue.upsertJobScheduler(
-    SCHEDULER_JOB_ID,
-    { every: SCHEDULER_INTERVAL_MS },
-    { name: SCHEDULER_JOB_ID, opts: { removeOnComplete: true, removeOnFail: 20 } }
-  );
-
-  const worker = new Worker(
-    SCHEDULER_QUEUE_NAME,
-    async () => {
-      const count = await pollDueInboxes();
-      if (count > 0) logger.debug({ count }, "poll-inbox: polled due accounts");
-    },
-    // See tick.ts for why drainDelay (seconds) is raised — this job only fires every 15
-    // minutes, so idle-polling every 5s wastes Redis commands for no benefit.
-    { connection, drainDelay: 55 }
-  );
-  worker.on("error", (err) => logger.error({ err }, "poll-inbox worker error"));
-
-  return { queue, worker };
 }

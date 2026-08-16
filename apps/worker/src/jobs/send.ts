@@ -258,9 +258,10 @@ export function registerSendWorker(connection: ConnectionOptions): Worker {
     async (job) => {
       await processSend(job.data.sendId as string);
     },
-    // See tick.ts for why drainDelay (seconds) is raised. A real send job still wakes this
-    // worker immediately when tick pushes it — this only cuts the idle-polling heartbeat.
-    { connection, concurrency: 5, drainDelay: 55 }
+    // See tick.ts for why drainDelay (seconds) and stalledInterval (ms) are both raised. A
+    // real send job still wakes this worker immediately when tick pushes it — this only cuts
+    // the idle-polling heartbeat and the periodic stalled-job check.
+    { connection, concurrency: 5, drainDelay: 55, stalledInterval: 5 * 60_000 }
   );
   worker.on("error", (err) => logger.error({ err }, "send worker error"));
   worker.on("failed", (job, err) => logger.error({ sendId: job?.data?.sendId, err }, "send job failed"));

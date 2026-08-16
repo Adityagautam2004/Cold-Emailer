@@ -3,6 +3,8 @@ import { logger } from "@dispatch/config";
 import { prisma } from "@dispatch/db";
 import { Queue, Worker, type ConnectionOptions } from "bullmq";
 import { QUEUE_NAMES } from "../queues.js";
+import { resetDueQuotas } from "./reset-quota.js";
+import { pollDueInboxes } from "./poll-inbox.js";
 
 const TICK_JOB_ID = "tick";
 const TICK_INTERVAL_MS = 60_000;
@@ -144,23 +146,39 @@ export async function registerTickJob(
       await sweepStuckClaims();
 
       const claimed = await claimDueSends();
-      if (claimed.length === 0) {
+      if (claimed.length > 0) {
+        const haltedAccounts = new Set<string>();
+        for (const row of claimed) {
+          await processClaimedSend(row.id, haltedAccounts, sendQueue);
+        }
+        logger.debug({ claimed: claimed.length }, "tick processed");
+      } else {
         logger.debug("tick: 0 due");
-        return;
       }
 
-      const haltedAccounts = new Set<string>();
-      for (const row of claimed) {
-        await processClaimedSend(row.id, haltedAccounts, sendQueue);
-      }
-      logger.debug({ claimed: claimed.length }, "tick processed");
+      // Reset-quota and inbox-poll used to be their own BullMQ queues, each with a repeatable
+      // scheduler. Both underlying checks are already self-gated by a DB "is this actually
+      // due" query (nextLocalMidnight / lastPolledAt cutoff), so calling them every tick is
+      // just two cheap SQL queries — negligible next to the Redis cost of a whole extra
+      // queue. BullMQ hardcodes a 10s floor on the idle blocking-wait for any queue with a
+      // repeatable job scheduled (see taskforcesh/bullmq#1658) — that floor can't be tuned via
+      // options, so it was a fixed per-queue tax. Folding both into this tick removed two of
+      // those queues entirely instead of just trying to poll them less often.
+      const resetCount = await resetDueQuotas();
+      if (resetCount > 0) logger.info({ count: resetCount }, "reset quota for accounts past local midnight");
+
+      const polledCount = await pollDueInboxes();
+      if (polledCount > 0) logger.debug({ count: polledCount }, "poll-inbox: polled due accounts");
     },
     // drainDelay is in SECONDS — how long to long-poll Redis before re-checking an empty
-    // queue. Default (5s) means 4 idle workers hammer Upstash with a Redis command roughly
+    // queue. Default (5s) means idle workers hammer Upstash with a Redis command roughly
     // every 5s forever, which burns through a pay-per-command plan fast. The scheduler only
     // enqueues a tick once every TICK_INTERVAL_MS anyway, so there is nothing to gain from
     // polling faster than that — a real job push still wakes the blocking call immediately.
-    { connection, drainDelay: 55 }
+    // stalledInterval (ms, default 30000) runs a separate "is any active job stalled" check
+    // on its own timer regardless of drainDelay — 5 minutes is still fast recovery for a
+    // single-process worker at this send volume, and cuts that check's Redis cost ~10x.
+    { connection, drainDelay: 55, stalledInterval: 5 * 60_000 }
   );
 
   worker.on("error", (err) => logger.error({ err }, "scheduler worker error"));
