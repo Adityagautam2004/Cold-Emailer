@@ -10,6 +10,7 @@ import Google from "next-auth/providers/google";
  * and only ever runs in Node-runtime route handlers and server components.
  */
 export const authConfig: NextAuthConfig = {
+  trustHost: true,
   session: { strategy: "jwt" },
   secret: env.AUTH_SECRET,
   pages: { signIn: "/login" },
